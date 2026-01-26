@@ -142,6 +142,19 @@ const BarrowsTracker = () => {
     addDrops([itemName], killCount);
   };
 
+  const quickRemoveDrop = (itemName) => {
+    // Find the most recent drop of this item and remove it
+    const itemHistory = dropHistory.filter(d => d.item === itemName);
+    if (itemHistory.length === 0) return;
+
+    // Sort by timestamp to get the most recent
+    const mostRecent = itemHistory.sort((a, b) =>
+      new Date(b.timestamp) - new Date(a.timestamp)
+    )[0];
+
+    removeDrop(mostRecent.id);
+  };
+
   const removeDrop = (historyId) => {
     const dropToRemove = dropHistory.find(d => d.id === historyId);
     if (!dropToRemove) return;
@@ -417,7 +430,7 @@ const BarrowsTracker = () => {
 
           <div className="p-6">
             {activeTab === 'collection' ? (
-              <CollectionTab drops={drops} onQuickAdd={quickAddDrop} getBrotherCompletion={getBrotherCompletion} />
+              <CollectionTab drops={drops} onQuickAdd={quickAddDrop} onQuickRemove={quickRemoveDrop} getBrotherCompletion={getBrotherCompletion} />
             ) : (
               <StatisticsTab 
                 stats={stats} 
@@ -521,7 +534,18 @@ const SetupScreen = ({ onComplete, onSkip, hasExistingData }) => {
   );
 };
 
-const CollectionTab = ({ drops, onQuickAdd, getBrotherCompletion }) => {
+const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion }) => {
+  const handleItemClick = (e, itemName) => {
+    // Shift+click or right-click to decrement
+    if (e.shiftKey || e.button === 2) {
+      e.preventDefault();
+      onQuickRemove(itemName);
+    } else if (e.button === 0) {
+      // Left click to increment
+      onQuickAdd(itemName);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {Object.entries(BARROWS_DATA).map(([brother, items]) => {
@@ -534,6 +558,9 @@ const CollectionTab = ({ drops, onQuickAdd, getBrotherCompletion }) => {
                 {completion.obtained}/{completion.total}
               </span>
             </div>
+            <div className="text-gray-400 text-xs mb-3">
+              Left-click to add • Shift+click or right-click to remove
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {items.map(item => {
                 const count = drops[item.name] || 0;
@@ -541,7 +568,11 @@ const CollectionTab = ({ drops, onQuickAdd, getBrotherCompletion }) => {
                 return (
                   <button
                     key={item.name}
-                    onClick={() => onQuickAdd(item.name)}
+                    onClick={(e) => handleItemClick(e, item.name)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      onQuickRemove(item.name);
+                    }}
                     className={`flex items-center gap-3 p-3 rounded transition-all ${
                       obtained ? 'bg-green-700 hover:bg-green-600' : 'bg-gray-800 hover:bg-gray-600'
                     }`}
