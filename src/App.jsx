@@ -68,7 +68,6 @@ const BarrowsTracker = () => {
   const [dropHistory, setDropHistory] = useState([]);
   const [showSetup, setShowSetup] = useState(true);
   const [showAddDrop, setShowAddDrop] = useState(false);
-  const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingDrop, setEditingDrop] = useState(null);
@@ -396,7 +395,7 @@ const BarrowsTracker = () => {
             {/* Row 1: Run Controls */}
             <div className="flex gap-2 flex-wrap">
               <button onClick={incrementKC} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-900 shadow-lg flex items-center gap-2">
-                <Plus className="w-4 h-4" /> +1 Run
+                <Plus className="w-4 h-4" /> Add Run
               </button>
               <input
                 type="number"
@@ -414,9 +413,6 @@ const BarrowsTracker = () => {
             <div className="flex gap-2 flex-wrap">
               <button onClick={() => setShowAddDrop(true)} className="bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg flex items-center gap-2">
                 <Plus className="w-4 h-4" /> Add Drop
-              </button>
-              <button onClick={() => setShowBulkAdd(true)} className="bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg flex items-center gap-2">
-                <Plus className="w-4 h-4" /> Bulk Add
               </button>
             </div>
 
@@ -489,13 +485,6 @@ const BarrowsTracker = () => {
           killCount={killCount}
           onAdd={addDrops}
           onClose={() => setShowAddDrop(false)}
-        />
-      )}
-
-      {showBulkAdd && (
-        <BulkAddModal
-          onAdd={addDrops}
-          onClose={() => setShowBulkAdd(false)}
         />
       )}
 
@@ -684,6 +673,64 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
 
 const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDropKC, removeDrop }) => {
   const [editKC, setEditKC] = useState('');
+  const [sortConfig, setSortConfig] = useState({ column: null, direction: 'asc' });
+
+  const handleSort = (column) => {
+    if (sortConfig.column === column) {
+      // Toggle direction if same column
+      setSortConfig({
+        column,
+        direction: sortConfig.direction === 'asc' ? 'desc' : 'asc'
+      });
+    } else {
+      // Set new column with ascending direction
+      setSortConfig({ column, direction: 'asc' });
+    }
+  };
+
+  const getSortedData = () => {
+    if (!sortConfig.column) {
+      return stats.dropsWithDryStreak;
+    }
+
+    const sorted = [...stats.dropsWithDryStreak].sort((a, b) => {
+      let aVal, bVal;
+
+      switch (sortConfig.column) {
+        case 'item':
+          aVal = a.item.toLowerCase();
+          bVal = b.item.toLowerCase();
+          return sortConfig.direction === 'asc'
+            ? aVal.localeCompare(bVal)
+            : bVal.localeCompare(aVal);
+        case 'killCount':
+          aVal = a.killCount;
+          bVal = b.killCount;
+          break;
+        case 'dryStreak':
+          aVal = a.dryStreak;
+          bVal = b.dryStreak;
+          break;
+        default:
+          return 0;
+      }
+
+      return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+
+    return sorted;
+  };
+
+  const SortIcon = ({ column }) => {
+    if (sortConfig.column !== column) {
+      return <span className="text-amber-600 opacity-50 ml-1">⇅</span>;
+    }
+    return sortConfig.direction === 'asc'
+      ? <span className="text-yellow-300 ml-1">↑</span>
+      : <span className="text-yellow-300 ml-1">↓</span>;
+  };
+
+  const sortedData = getSortedData();
 
   return (
     <div className="space-y-6">
@@ -692,14 +739,29 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDropKC, remov
           <thead className="bg-gradient-to-b from-amber-800 to-amber-950">
             <tr>
               <th className="px-4 py-3 text-left rs-text-gold font-bold">#</th>
-              <th className="px-4 py-3 text-left rs-text-gold font-bold">Item</th>
-              <th className="px-4 py-3 text-left rs-text-gold font-bold">Run Count</th>
-              <th className="px-4 py-3 text-left rs-text-gold font-bold">Dry Streak</th>
+              <th
+                className="px-4 py-3 text-left rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
+                onClick={() => handleSort('item')}
+              >
+                Item<SortIcon column="item" />
+              </th>
+              <th
+                className="px-4 py-3 text-left rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
+                onClick={() => handleSort('killCount')}
+              >
+                Run Count<SortIcon column="killCount" />
+              </th>
+              <th
+                className="px-4 py-3 text-left rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
+                onClick={() => handleSort('dryStreak')}
+              >
+                Dry Streak<SortIcon column="dryStreak" />
+              </th>
               <th className="px-4 py-3 text-left rs-text-gold font-bold">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {stats.dropsWithDryStreak.map((drop, idx) => (
+            {sortedData.map((drop, idx) => (
               <tr key={drop.id} className="border-t-2 border-amber-900 hover:bg-stone-700">
                 <td className="px-4 py-3 text-amber-200 font-semibold">{idx + 1}</td>
                 <td className="px-4 py-3 text-amber-100 font-semibold">{drop.item}</td>
@@ -762,8 +824,7 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDropKC, remov
 const AddDropModal = ({ killCount, onAdd, onClose }) => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [dropKC, setDropKC] = useState(killCount.toString());
-
-  const allItems = Object.values(BARROWS_DATA).flat();
+  const [searchQuery, setSearchQuery] = useState('');
 
   const toggleItem = (itemName) => {
     setSelectedItems(prev =>
@@ -780,9 +841,34 @@ const AddDropModal = ({ killCount, onAdd, onClose }) => {
     }
   };
 
+  // Filter brothers and items based on search query
+  const getFilteredData = () => {
+    if (!searchQuery.trim()) {
+      return BARROWS_DATA;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const filtered = {};
+
+    Object.entries(BARROWS_DATA).forEach(([brother, items]) => {
+      const matchingItems = items.filter(item =>
+        item.name.toLowerCase().includes(query) ||
+        brother.toLowerCase().includes(query)
+      );
+      if (matchingItems.length > 0) {
+        filtered[brother] = matchingItems;
+      }
+    });
+
+    return filtered;
+  };
+
+  const filteredData = getFilteredData();
+  const hasResults = Object.keys(filteredData).length > 0;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
-      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-2xl w-full border-4 border-amber-900 max-h-[90vh] overflow-y-auto rs-border">
+      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-4xl w-full border-4 border-amber-900 max-h-[90vh] overflow-y-auto rs-border">
         <h3 className="text-2xl font-bold rs-text-gold mb-4">Add Drop(s)</h3>
         <div className="space-y-4">
           <div>
@@ -794,30 +880,60 @@ const AddDropModal = ({ killCount, onAdd, onClose }) => {
               className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
             />
           </div>
+
           <div>
-            <label className="block text-amber-200 mb-2 font-semibold">Items (select one or more)</label>
-            <div className="bg-stone-900 rounded p-4 max-h-96 overflow-y-auto border-2 border-amber-900">
-              <div className="grid grid-cols-1 gap-2">
-                {allItems.map(item => (
-                  <button
-                    key={item.name}
-                    onClick={() => toggleItem(item.name)}
-                    className={`flex items-center gap-3 p-2 rounded transition-all text-left border-2 ${
-                      selectedItems.includes(item.name)
-                        ? 'bg-gradient-to-b from-amber-700 to-amber-900 hover:from-amber-600 hover:to-amber-800 border-amber-950'
-                        : 'bg-gradient-to-b from-stone-800 to-stone-950 hover:from-stone-700 hover:to-stone-900 border-stone-950'
-                    }`}
-                  >
-                    <img src={item.img} alt={item.name} className="w-8 h-8 object-contain" />
-                    <span className="text-amber-100 text-sm font-semibold">{item.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <p className="text-amber-300 text-sm mt-2 font-semibold">
-              Selected: {selectedItems.length} item(s)
-            </p>
+            <label className="block text-amber-200 mb-2 font-semibold">Search Items</label>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by item name or brother..."
+              className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
+            />
           </div>
+
+          <div>
+            <label className="block text-amber-200 mb-2 font-semibold">
+              Items (select one or more)
+              <span className="text-amber-300 text-sm ml-2">
+                Selected: {selectedItems.length} item(s)
+              </span>
+            </label>
+            <div className="bg-stone-900 rounded p-4 max-h-[50vh] overflow-y-auto border-2 border-amber-900">
+              {!hasResults ? (
+                <div className="text-amber-300 text-center py-8">
+                  No items found matching "{searchQuery}"
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(filteredData).map(([brother, items]) => (
+                    <div key={brother}>
+                      <h4 className="text-lg font-bold text-amber-300 mb-2 border-b border-amber-800 pb-1">
+                        {brother}
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {items.map(item => (
+                          <button
+                            key={item.name}
+                            onClick={() => toggleItem(item.name)}
+                            className={`flex items-center gap-3 p-2 rounded transition-all text-left border-2 ${
+                              selectedItems.includes(item.name)
+                                ? 'bg-gradient-to-b from-amber-700 to-amber-900 hover:from-amber-600 hover:to-amber-800 border-amber-950'
+                                : 'bg-gradient-to-b from-stone-800 to-stone-950 hover:from-stone-700 hover:to-stone-900 border-stone-950'
+                            }`}
+                          >
+                            <img src={item.img} alt={item.name} className="w-8 h-8 object-contain" />
+                            <span className="text-amber-100 text-sm font-semibold">{item.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="flex gap-2">
             <button
               onClick={handleAdd}
@@ -842,8 +958,7 @@ const AddDropModal = ({ killCount, onAdd, onClose }) => {
 const BulkAddModal = ({ onAdd, onClose }) => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [dropKC, setDropKC] = useState('');
-
-  const allItems = Object.values(BARROWS_DATA).flat();
+  const [searchQuery, setSearchQuery] = useState('');
 
   const toggleItem = (itemName) => {
     setSelectedItems(prev =>
@@ -860,9 +975,34 @@ const BulkAddModal = ({ onAdd, onClose }) => {
     }
   };
 
+  // Filter brothers and items based on search query
+  const getFilteredData = () => {
+    if (!searchQuery.trim()) {
+      return BARROWS_DATA;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const filtered = {};
+
+    Object.entries(BARROWS_DATA).forEach(([brother, items]) => {
+      const matchingItems = items.filter(item =>
+        item.name.toLowerCase().includes(query) ||
+        brother.toLowerCase().includes(query)
+      );
+      if (matchingItems.length > 0) {
+        filtered[brother] = matchingItems;
+      }
+    });
+
+    return filtered;
+  };
+
+  const filteredData = getFilteredData();
+  const hasResults = Object.keys(filteredData).length > 0;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
-      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-2xl w-full border-4 border-amber-900 max-h-[90vh] overflow-y-auto rs-border">
+      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-4xl w-full border-4 border-amber-900 max-h-[90vh] overflow-y-auto rs-border">
         <h3 className="text-2xl font-bold rs-text-gold mb-4">Bulk Add Drop(s)</h3>
         <div className="space-y-4">
           <div>
@@ -875,30 +1015,60 @@ const BulkAddModal = ({ onAdd, onClose }) => {
               placeholder="Enter run count for these drops"
             />
           </div>
+
           <div>
-            <label className="block text-amber-200 mb-2 font-semibold">Items (select one or more)</label>
-            <div className="bg-stone-900 rounded p-4 max-h-96 overflow-y-auto border-2 border-amber-900">
-              <div className="grid grid-cols-1 gap-2">
-                {allItems.map(item => (
-                  <button
-                    key={item.name}
-                    onClick={() => toggleItem(item.name)}
-                    className={`flex items-center gap-3 p-2 rounded transition-all text-left border-2 ${
-                      selectedItems.includes(item.name)
-                        ? 'bg-gradient-to-b from-orange-700 to-orange-900 hover:from-orange-600 hover:to-orange-800 border-orange-950'
-                        : 'bg-gradient-to-b from-stone-800 to-stone-950 hover:from-stone-700 hover:to-stone-900 border-stone-950'
-                    }`}
-                  >
-                    <img src={item.img} alt={item.name} className="w-8 h-8 object-contain" />
-                    <span className="text-amber-100 text-sm font-semibold">{item.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <p className="text-amber-300 text-sm mt-2 font-semibold">
-              Selected: {selectedItems.length} item(s)
-            </p>
+            <label className="block text-amber-200 mb-2 font-semibold">Search Items</label>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by item name or brother..."
+              className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
+            />
           </div>
+
+          <div>
+            <label className="block text-amber-200 mb-2 font-semibold">
+              Items (select one or more)
+              <span className="text-amber-300 text-sm ml-2">
+                Selected: {selectedItems.length} item(s)
+              </span>
+            </label>
+            <div className="bg-stone-900 rounded p-4 max-h-[50vh] overflow-y-auto border-2 border-amber-900">
+              {!hasResults ? (
+                <div className="text-amber-300 text-center py-8">
+                  No items found matching "{searchQuery}"
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(filteredData).map(([brother, items]) => (
+                    <div key={brother}>
+                      <h4 className="text-lg font-bold text-amber-300 mb-2 border-b border-amber-800 pb-1">
+                        {brother}
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {items.map(item => (
+                          <button
+                            key={item.name}
+                            onClick={() => toggleItem(item.name)}
+                            className={`flex items-center gap-3 p-2 rounded transition-all text-left border-2 ${
+                              selectedItems.includes(item.name)
+                                ? 'bg-gradient-to-b from-orange-700 to-orange-900 hover:from-orange-600 hover:to-orange-800 border-orange-950'
+                                : 'bg-gradient-to-b from-stone-800 to-stone-950 hover:from-stone-700 hover:to-stone-900 border-stone-950'
+                            }`}
+                          >
+                            <img src={item.img} alt={item.name} className="w-8 h-8 object-contain" />
+                            <span className="text-amber-100 text-sm font-semibold">{item.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="flex gap-2">
             <button
               onClick={handleAdd}
