@@ -3,55 +3,55 @@ import { Trophy, Plus, Edit2, Trash2, Settings, Award, ArrowLeft } from 'lucide-
 
 const BARROWS_DATA = {
   'Ahrim': [
-    { name: "Ahrim's staff" },
-    { name: "Ahrim's wand" },
-    { name: "Ahrim's book of magic" },
-    { name: "Ahrim's hood" },
-    { name: "Ahrim's robe top" },
-    { name: "Ahrim's robe skirt" }
+    { name: "Ahrim's staff", img: '/barrows-items/Ahrims_staff.png' },
+    { name: "Ahrim's wand", img: '/barrows-items/Ahrims_wand.png' },
+    { name: "Ahrim's book of magic", img: '/barrows-items/Ahrims_book_of_magic.png' },
+    { name: "Ahrim's hood", img: '/barrows-items/Ahrims_hood.png' },
+    { name: "Ahrim's robe top", img: '/barrows-items/Ahrims_robe_top.png' },
+    { name: "Ahrim's robe skirt", img: '/barrows-items/Ahrims_robe_skirt.png' }
   ],
   'Dharok': [
-    { name: "Dharok's greataxe" },
-    { name: "Dharok's helm" },
-    { name: "Dharok's platebody" },
-    { name: "Dharok's platelegs" }
+    { name: "Dharok's greataxe", img: '/barrows-items/Dharoks_greataxe.png' },
+    { name: "Dharok's helm", img: '/barrows-items/Dharoks_helm.png' },
+    { name: "Dharok's platebody", img: '/barrows-items/Dharoks_platebody.png' },
+    { name: "Dharok's platelegs", img: '/barrows-items/Dharoks_platelegs.png' }
   ],
   'Guthan': [
-    { name: "Guthan's warspear" },
-    { name: "Guthan's helm" },
-    { name: "Guthan's platebody" },
-    { name: "Guthan's platelegs" }
+    { name: "Guthan's warspear", img: '/barrows-items/Guthans_warspear.png' },
+    { name: "Guthan's helm", img: '/barrows-items/Guthans_helm.png' },
+    { name: "Guthan's platebody", img: '/barrows-items/Guthans_platebody.png' },
+    { name: "Guthan's chainskirt", img: '/barrows-items/Guthans_chainskirt.png' }
   ],
   'Karil': [
-    { name: "Karil's crossbow" },
-    { name: "Karil's pistol crossbow" },
-    { name: "Karil's off-hand pistol crossbow" },
-    { name: "Karil's coif" },
-    { name: "Karil's top" },
-    { name: "Karil's skirt" }
+    { name: "Karil's crossbow", img: '/barrows-items/Karils_crossbow.png' },
+    { name: "Karil's pistol crossbow", img: '/barrows-items/Karils_pistol_crossbow.png' },
+    { name: "Karil's off-hand pistol crossbow", img: '/barrows-items/Karils_off_hand_pistol_crossbow.png' },
+    { name: "Karil's coif", img: '/barrows-items/Karils_coif.png' },
+    { name: "Karil's top", img: '/barrows-items/Karils_top.png' },
+    { name: "Karil's skirt", img: '/barrows-items/Karils_skirt.png' }
   ],
   'Torag': [
-    { name: "Torag's hammers" },
-    { name: "Torag's helm" },
-    { name: "Torag's platebody" },
-    { name: "Torag's platelegs" }
+    { name: "Torag's hammer", img: '/barrows-items/Torags_hammer.png' },
+    { name: "Torag's helm", img: '/barrows-items/Torags_helm.png' },
+    { name: "Torag's platebody", img: '/barrows-items/Torags_platebody.png' },
+    { name: "Torag's platelegs", img: '/barrows-items/Torags_platelegs.png' }
   ],
   'Verac': [
-    { name: "Verac's flail" },
-    { name: "Verac's helm" },
-    { name: "Verac's brassard" },
-    { name: "Verac's plateskirt" }
+    { name: "Verac's flail", img: '/barrows-items/Veracs_flail.png' },
+    { name: "Verac's helm", img: '/barrows-items/Veracs_helm.png' },
+    { name: "Verac's brassard", img: '/barrows-items/Veracs_brassard.png' },
+    { name: "Verac's plateskirt", img: '/barrows-items/Veracs_plateskirt.png' }
   ],
   'Linza': [
-    { name: "Linza's helm" },
-    { name: "Linza's cuirass" },
-    { name: "Linza's greaves" },
-    { name: "Linza's hammer" },
-    { name: "Linza's shield" }
+    { name: "Linza's helm", img: '/barrows-items/Linzas_helm.png' },
+    { name: "Linza's cuirass", img: '/barrows-items/Linzas_cuirass.png' },
+    { name: "Linza's greaves", img: '/barrows-items/Linzas_greaves.png' },
+    { name: "Linza's hammer", img: '/barrows-items/Linzas_hammer.png' },
+    { name: "Linza's shield", img: '/barrows-items/Linzas_shield.png' }
   ],
   'Shared': [
-    { name: "Amulet of the forsaken" },
-    { name: "Corruption sigil" }
+    { name: "Amulet of the forsaken", img: '/barrows-items/Amulet_of_the_forsaken.png' },
+    { name: "Corruption sigil", img: '/barrows-items/Corruption_sigil.png' }
   ]
 };
 
@@ -379,9 +379,7 @@ const CollectionTab = ({ drops, onQuickAdd, getBrotherCompletion }) => {
                       obtained ? 'bg-green-700 hover:bg-green-600' : 'bg-gray-800 hover:bg-gray-600'
                     }`}
                   >
-                    <div className="w-12 h-12 bg-purple-600 rounded flex items-center justify-center text-white font-bold text-xs border-2 border-purple-400">
-                      {item.name.split("'")[0].slice(0,2).toUpperCase()}
-                    </div>
+                    <img src={item.img} alt={item.name} className="w-12 h-12 object-contain" />
                     <div className="flex-1 text-left">
                       <div className="text-white text-sm font-medium">{item.name}</div>
                       {obtained && <div className="text-green-300 text-xs">x{count}</div>}
@@ -523,9 +521,7 @@ const AddDropModal = ({ killCount, onAdd, onClose }) => {
                         : 'bg-gray-800 hover:bg-gray-600'
                     }`}
                   >
-                    <div className="w-8 h-8 bg-purple-600 rounded flex items-center justify-center text-white font-bold text-xs border-2 border-purple-400">
-                      {item.name.split("'")[0].slice(0,2).toUpperCase()}
-                    </div>
+                    <img src={item.img} alt={item.name} className="w-8 h-8 object-contain" />
                     <span className="text-white text-sm">{item.name}</span>
                   </button>
                 ))}
@@ -606,9 +602,7 @@ const BulkAddModal = ({ onAdd, onClose }) => {
                         : 'bg-gray-800 hover:bg-gray-600'
                     }`}
                   >
-                    <div className="w-8 h-8 bg-orange-600 rounded flex items-center justify-center text-white font-bold text-xs border-2 border-orange-400">
-                      {item.name.split("'")[0].slice(0,2).toUpperCase()}
-                    </div>
+                    <img src={item.img} alt={item.name} className="w-8 h-8 object-contain" />
                     <span className="text-white text-sm">{item.name}</span>
                   </button>
                 ))}
