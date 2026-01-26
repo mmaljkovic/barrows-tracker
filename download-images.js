@@ -7,14 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const items = [
-  "Ahrim%27s_staff", "Ahrim%27s_wand", "Ahrim%27s_book_of_magic", "Ahrim%27s_hood", "Ahrim%27s_robe_top", "Ahrim%27s_robe_skirt",
-  "Dharok%27s_greataxe", "Dharok%27s_helm", "Dharok%27s_platebody", "Dharok%27s_platelegs",
-  "Guthan%27s_warspear", "Guthan%27s_helm", "Guthan%27s_platebody", "Guthan%27s_chainskirt",
-  "Karil%27s_crossbow", "Karil%27s_pistol_crossbow", "Karil%27s_off-hand_pistol_crossbow", "Karil%27s_coif", "Karil%27s_top", "Karil%27s_skirt",
-  "Torag%27s_hammer", "Torag%27s_helm", "Torag%27s_platebody", "Torag%27s_platelegs",
-  "Verac%27s_flail", "Verac%27s_helm", "Verac%27s_brassard", "Verac%27s_plateskirt",
-  "Linza%27s_helm", "Linza%27s_cuirass", "Linza%27s_greaves", "Linza%27s_hammer", "Linza%27s_shield",
-  "Amulet_of_the_forsaken", "Corruption_sigil"
+  "Akrisae%27s_hood", "Akrisae%27s_war_mace", "Akrisae%27s_robe_top", "Akrisae%27s_robe_skirt",
 ];
 
 const downloadImage = (url, filepath) => {

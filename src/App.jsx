@@ -10,6 +10,12 @@ const BARROWS_DATA = {
     { name: "Ahrim's robe top", img: '/barrows-items/Ahrims_robe_top.png' },
     { name: "Ahrim's robe skirt", img: '/barrows-items/Ahrims_robe_skirt.png' }
   ],
+  'Akrisae': [
+    { name: "Akrisae's hood", img: '/barrows-items/Akrisaes_hood.png' },
+    { name: "Akrisae's war mace", img: '/barrows-items/Akrisaes_war_mace.png' },
+    { name: "Akrisae's robe top", img: '/barrows-items/Akrisaes_robe_top.png' },
+    { name: "Akrisae's robe skirt", img: '/barrows-items/Akrisaes_robe_skirt.png' }
+  ],
   'Dharok': [
     { name: "Dharok's greataxe", img: '/barrows-items/Dharoks_greataxe.png' },
     { name: "Dharok's helm", img: '/barrows-items/Dharoks_helm.png' },
