@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Plus, Edit2, Trash2, Settings, Award, ArrowLeft } from 'lucide-react';
+import { Trophy, Plus, Edit2, Trash2, Settings, Award, ArrowLeft, Download, Upload } from 'lucide-react';
 
 const BARROWS_DATA = {
   'Ahrim': [
@@ -69,6 +69,8 @@ const BarrowsTracker = () => {
   const [showSetup, setShowSetup] = useState(true);
   const [showAddDrop, setShowAddDrop] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editingDrop, setEditingDrop] = useState(null);
   const [kcInput, setKcInput] = useState('');
 
@@ -185,6 +187,144 @@ const BarrowsTracker = () => {
     return { obtained, total: items.length, complete: obtained === items.length };
   };
 
+  // Import/Export Helper Functions
+  const getAllValidItemNames = () => {
+    return Object.values(BARROWS_DATA).flat().map(item => item.name);
+  };
+
+  const generateExportText = (history) => {
+    if (!history || history.length === 0) return '';
+
+    // Sort by killCount ascending
+    const sorted = [...history].sort((a, b) => a.killCount - b.killCount);
+
+    // Format each drop as separate line: "KC | Item"
+    return sorted.map(drop => `${drop.killCount} | ${drop.item}`).join('\n');
+  };
+
+  const downloadTextFile = (content, filename) => {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
+  const parseImportText = (text) => {
+    const validNames = new Set(getAllValidItemNames());
+    const lines = text.split(/\r?\n/);
+    const success = [];
+    const errors = [];
+
+    lines.forEach((line, index) => {
+      const trimmed = line.trim();
+
+      // Skip empty lines and comments
+      if (!trimmed || trimmed.startsWith('#')) return;
+
+      // Split by pipe
+      const parts = trimmed.split('|');
+      if (parts.length !== 2) {
+        errors.push({
+          line: index + 1,
+          message: `Invalid format. Expected "KC | Item". Got: "${trimmed}"`
+        });
+        return;
+      }
+
+      const kcStr = parts[0].trim();
+      const itemName = parts[1].trim();
+
+      // Validate KC
+      const kc = parseInt(kcStr);
+      if (isNaN(kc) || kc < 0) {
+        errors.push({
+          line: index + 1,
+          message: `Invalid kill count "${kcStr}". Must be a positive number.`
+        });
+        return;
+      }
+
+      // Validate item name
+      if (!validNames.has(itemName)) {
+        errors.push({
+          line: index + 1,
+          message: `Unknown item "${itemName}". Check spelling and apostrophes.`
+        });
+        return;
+      }
+
+      success.push({ killCount: kc, item: itemName });
+    });
+
+    return { success, errors };
+  };
+
+  const readFileAsText = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = (e) => reject(e);
+      reader.readAsText(file);
+    });
+  };
+
+  const mergeImportedData = (parsedEntries) => {
+    const newHistory = [...dropHistory];
+    const newDrops = { ...drops };
+
+    parsedEntries.forEach(entry => {
+      const dropEntry = {
+        id: Date.now() + Math.random(),
+        item: entry.item,
+        killCount: entry.killCount,
+        timestamp: new Date().toISOString()
+      };
+      newHistory.push(dropEntry);
+      newDrops[entry.item] = (newDrops[entry.item] || 0) + 1;
+    });
+
+    setDropHistory(newHistory);
+    setDrops(newDrops);
+    saveData(killCount, newDrops, newHistory);
+  };
+
+  const replaceWithImportedData = (parsedEntries) => {
+    const newHistory = [];
+    const newDrops = {};
+    let maxKC = 0;
+
+    parsedEntries.forEach(entry => {
+      const dropEntry = {
+        id: Date.now() + Math.random(),
+        item: entry.item,
+        killCount: entry.killCount,
+        timestamp: new Date().toISOString()
+      };
+      newHistory.push(dropEntry);
+      newDrops[entry.item] = (newDrops[entry.item] || 0) + 1;
+      maxKC = Math.max(maxKC, entry.killCount);
+    });
+
+    setKillCount(maxKC);
+    setDropHistory(newHistory);
+    setDrops(newDrops);
+    saveData(maxKC, newDrops, newHistory);
+  };
+
   if (showSetup) {
     return <SetupScreen onComplete={handleSetup} onSkip={() => setShowSetup(false)} hasExistingData={killCount > 0} />;
   }
@@ -247,6 +387,12 @@ const BarrowsTracker = () => {
             <button onClick={() => setShowBulkAdd(true)} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded flex items-center gap-2">
               <Plus className="w-4 h-4" /> Bulk Add
             </button>
+            <button onClick={() => setShowExport(true)} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded flex items-center gap-2">
+              <Download className="w-4 h-4" /> Export
+            </button>
+            <button onClick={() => setShowImport(true)} className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded flex items-center gap-2">
+              <Upload className="w-4 h-4" /> Import
+            </button>
             <button onClick={() => setShowSetup(true)} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center gap-2">
               <Settings className="w-4 h-4" /> Setup
             </button>
@@ -294,9 +440,24 @@ const BarrowsTracker = () => {
       )}
 
       {showBulkAdd && (
-        <BulkAddModal 
+        <BulkAddModal
           onAdd={addDrops}
           onClose={() => setShowBulkAdd(false)}
+        />
+      )}
+
+      {showExport && (
+        <ExportModal
+          dropHistory={dropHistory}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {showImport && (
+        <ImportModal
+          onMerge={mergeImportedData}
+          onReplace={replaceWithImportedData}
+          onClose={() => setShowImport(false)}
         />
       )}
     </div>
@@ -634,6 +795,405 @@ const BulkAddModal = ({ onAdd, onClose }) => {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const ImportModal = ({ onMerge, onReplace, onClose }) => {
+  const [inputMethod, setInputMethod] = useState('paste'); // 'paste' or 'upload'
+  const [importText, setImportText] = useState('');
+  const [importMode, setImportMode] = useState('merge'); // 'merge' or 'replace'
+  const [validationResult, setValidationResult] = useState(null);
+  const [showConfirmReplace, setShowConfirmReplace] = useState(false);
+
+  const getAllValidItemNames = () => {
+    return Object.values(BARROWS_DATA).flat().map(item => item.name);
+  };
+
+  const parseImportText = (text) => {
+    const validNames = new Set(getAllValidItemNames());
+    const lines = text.split(/\r?\n/);
+    const success = [];
+    const errors = [];
+
+    lines.forEach((line, index) => {
+      const trimmed = line.trim();
+
+      // Skip empty lines and comments
+      if (!trimmed || trimmed.startsWith('#')) return;
+
+      // Split by pipe
+      const parts = trimmed.split('|');
+      if (parts.length !== 2) {
+        errors.push({
+          line: index + 1,
+          message: `Invalid format. Expected "KC | Item". Got: "${trimmed}"`
+        });
+        return;
+      }
+
+      const kcStr = parts[0].trim();
+      const itemName = parts[1].trim();
+
+      // Validate KC
+      const kc = parseInt(kcStr);
+      if (isNaN(kc) || kc < 0) {
+        errors.push({
+          line: index + 1,
+          message: `Invalid kill count "${kcStr}". Must be a positive number.`
+        });
+        return;
+      }
+
+      // Validate item name
+      if (!validNames.has(itemName)) {
+        errors.push({
+          line: index + 1,
+          message: `Unknown item "${itemName}". Check spelling and apostrophes.`
+        });
+        return;
+      }
+
+      success.push({ killCount: kc, item: itemName });
+    });
+
+    return { success, errors };
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+      setImportText(text);
+      setValidationResult(null);
+    } catch (error) {
+      alert('Failed to read file: ' + error.message);
+    }
+  };
+
+  const handlePreview = () => {
+    if (!importText.trim()) {
+      alert('Please enter or upload some data first.');
+      return;
+    }
+
+    const result = parseImportText(importText);
+    setValidationResult(result);
+  };
+
+  const handleImport = () => {
+    if (!validationResult || validationResult.success.length === 0) {
+      alert('Please preview the data first and ensure there are no errors.');
+      return;
+    }
+
+    if (importMode === 'replace') {
+      setShowConfirmReplace(true);
+    } else {
+      onMerge(validationResult.success);
+      onClose();
+    }
+  };
+
+  const confirmReplace = () => {
+    if (validationResult && validationResult.success.length > 0) {
+      onReplace(validationResult.success);
+      onClose();
+    }
+  };
+
+  if (showConfirmReplace) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div className="bg-gray-800 rounded-lg shadow-2xl p-6 max-w-md w-full border border-red-700">
+          <h3 className="text-xl font-bold text-red-400 mb-4">⚠️ Confirm Replace</h3>
+          <p className="text-white mb-4">
+            This will <strong>permanently delete</strong> all your current drop history and replace it with the imported data.
+          </p>
+          <p className="text-gray-300 mb-6">
+            Are you sure you want to continue?
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={confirmReplace}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-semibold"
+            >
+              Yes, Replace All
+            </button>
+            <button
+              onClick={() => setShowConfirmReplace(false)}
+              className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-semibold"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+      <div className="bg-gray-800 rounded-lg shadow-2xl p-6 max-w-3xl w-full border border-purple-700 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-xl font-bold text-white mb-4">Import Drop History</h3>
+
+        <div className="space-y-4">
+          {/* Input Method Toggle */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setInputMethod('paste')}
+              className={`flex-1 px-4 py-2 rounded font-semibold ${
+                inputMethod === 'paste'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              Paste Text
+            </button>
+            <button
+              onClick={() => setInputMethod('upload')}
+              className={`flex-1 px-4 py-2 rounded font-semibold ${
+                inputMethod === 'upload'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              Upload File
+            </button>
+          </div>
+
+          {/* Input Area */}
+          {inputMethod === 'paste' ? (
+            <div>
+              <label className="block text-gray-300 mb-2">Paste Import Data</label>
+              <textarea
+                value={importText}
+                onChange={(e) => {
+                  setImportText(e.target.value);
+                  setValidationResult(null);
+                }}
+                placeholder="Paste your export data here (format: KC | Item)&#10;Example:&#10;1 | Ahrim's staff&#10;5 | Dharok's helm&#10;10 | Karil's crossbow"
+                className="w-full h-64 bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-gray-300 mb-2">Upload Text File</label>
+              <input
+                type="file"
+                accept=".txt"
+                onChange={handleFileUpload}
+                className="w-full bg-gray-700 text-white px-4 py-2 rounded"
+              />
+              {importText && (
+                <div className="mt-2 text-sm text-green-400">
+                  File loaded ({importText.split('\n').length} lines)
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Preview Button */}
+          <button
+            onClick={handlePreview}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold"
+          >
+            Preview & Validate
+          </button>
+
+          {/* Validation Results */}
+          {validationResult && (
+            <div className="bg-gray-700 rounded p-4">
+              {validationResult.success.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-green-400 font-semibold mb-2">
+                    ✓ Found {validationResult.success.length} valid drop(s)
+                  </div>
+                  <div className="text-sm text-gray-300">
+                    KC Range: {Math.min(...validationResult.success.map(d => d.killCount))} - {Math.max(...validationResult.success.map(d => d.killCount))}
+                  </div>
+                </div>
+              )}
+
+              {validationResult.errors.length > 0 && (
+                <div>
+                  <div className="text-red-400 font-semibold mb-2">
+                    ⚠️ {validationResult.errors.length} error(s) found:
+                  </div>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {validationResult.errors.map((error, idx) => (
+                      <div key={idx} className="text-sm text-red-300">
+                        Line {error.line}: {error.message}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Import Mode Selection */}
+          {validationResult && validationResult.success.length > 0 && validationResult.errors.length === 0 && (
+            <div className="bg-gray-700 rounded p-4">
+              <label className="block text-gray-300 mb-3 font-semibold">Import Mode</label>
+              <div className="space-y-2">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="importMode"
+                    value="merge"
+                    checked={importMode === 'merge'}
+                    onChange={(e) => setImportMode(e.target.value)}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="text-white font-medium">Merge with existing data</div>
+                    <div className="text-sm text-gray-400">Add imported drops to your current data</div>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="importMode"
+                    value="replace"
+                    checked={importMode === 'replace'}
+                    onChange={(e) => setImportMode(e.target.value)}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="text-white font-medium">Replace all data</div>
+                    <div className="text-sm text-red-400">⚠️ This will delete all existing drops!</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleImport}
+              disabled={!validationResult || validationResult.success.length === 0 || validationResult.errors.length > 0}
+              className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded font-semibold"
+            >
+              Import {validationResult?.success.length || 0} Drop(s)
+            </button>
+            <button
+              onClick={onClose}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-semibold"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ExportModal = ({ dropHistory, onClose }) => {
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  const exportText = dropHistory.length > 0
+    ? dropHistory
+        .slice()
+        .sort((a, b) => a.killCount - b.killCount)
+        .map(drop => `${drop.killCount} | ${drop.item}`)
+        .join('\n')
+    : '';
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(exportText);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (error) {
+      alert('Failed to copy to clipboard: ' + error.message);
+    }
+  };
+
+  const handleDownload = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `barrows-drops-${today}.txt`;
+    const blob = new Blob([exportText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const stats = {
+    totalEntries: dropHistory.length,
+    kcRange: dropHistory.length > 0
+      ? `${Math.min(...dropHistory.map(d => d.killCount))} - ${Math.max(...dropHistory.map(d => d.killCount))}`
+      : 'N/A'
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+      <div className="bg-gray-800 rounded-lg shadow-2xl p-6 max-w-3xl w-full border border-purple-700 max-h-[90vh] flex flex-col">
+        <h3 className="text-xl font-bold text-white mb-4">Export Drop History</h3>
+
+        {dropHistory.length === 0 ? (
+          <div className="text-gray-400 text-center py-8">
+            No drops to export. Add some drops first!
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-gray-700 rounded p-3 text-center">
+                <div className="text-gray-400 text-sm">Total Entries</div>
+                <div className="text-xl font-bold text-white">{stats.totalEntries}</div>
+              </div>
+              <div className="bg-gray-700 rounded p-3 text-center">
+                <div className="text-gray-400 text-sm">KC Range</div>
+                <div className="text-xl font-bold text-white">{stats.kcRange}</div>
+              </div>
+            </div>
+
+            <div className="mb-4 flex-1 min-h-0">
+              <label className="block text-gray-300 mb-2">Export Preview</label>
+              <textarea
+                value={exportText}
+                readOnly
+                className="w-full h-64 bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleCopy}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold flex items-center justify-center gap-2"
+              >
+                {copySuccess ? '✓ Copied!' : 'Copy to Clipboard'}
+              </button>
+              <button
+                onClick={handleDownload}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-semibold flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" /> Download File
+              </button>
+              <button
+                onClick={onClose}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
