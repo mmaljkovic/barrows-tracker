@@ -181,9 +181,9 @@ const BarrowsTracker = () => {
     saveData(killCount, newDrops, newHistory);
   };
 
-  const updateDropKC = (historyId, newKC) => {
-    const newHistory = dropHistory.map(d => 
-      d.id === historyId ? { ...d, killCount: newKC } : d
+  const updateDrop = (historyId, newKC, newDate) => {
+    const newHistory = dropHistory.map(d =>
+      d.id === historyId ? { ...d, killCount: newKC, timestamp: newDate } : d
     );
     setDropHistory(newHistory);
     saveData(killCount, drops, newHistory);
@@ -392,31 +392,17 @@ const BarrowsTracker = () => {
           </div>
 
           <div className="space-y-2">
-            {/* Row 1: Run Controls */}
+            {/* Main Actions */}
             <div className="flex gap-2 flex-wrap">
-              <button onClick={incrementKC} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-900 shadow-lg flex items-center gap-2">
+              <button onClick={incrementKC} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-900 shadow-lg flex items-center justify-center gap-2 min-w-32">
                 <Plus className="w-4 h-4" /> Add Run
               </button>
-              <input
-                type="number"
-                value={kcInput}
-                onChange={(e) => setKcInput(e.target.value)}
-                placeholder="Set Run Count"
-                className="bg-stone-800 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 w-40"
-              />
-              <button onClick={setKCManual} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg">
-                Set Run Count
-              </button>
-            </div>
-
-            {/* Row 2: Add Drops */}
-            <div className="flex gap-2 flex-wrap">
-              <button onClick={() => setShowAddDrop(true)} className="bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg flex items-center gap-2">
+              <button onClick={() => setShowAddDrop(true)} className="bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
                 <Plus className="w-4 h-4" /> Add Drop
               </button>
             </div>
 
-            {/* Row 3: Advanced Options (Collapsible) */}
+            {/* Advanced Options (Collapsible) */}
             <div className="border-t border-amber-900 pt-2">
               <button
                 onClick={() => setShowAdvanced(!showAdvanced)}
@@ -425,16 +411,30 @@ const BarrowsTracker = () => {
                 {showAdvanced ? '▼' : '▶'} Advanced Options
               </button>
               {showAdvanced && (
-                <div className="flex gap-2 flex-wrap mt-2">
-                  <button onClick={() => setShowImport(true)} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg flex items-center gap-2">
-                    <Upload className="w-4 h-4" /> Import
-                  </button>
-                  <button onClick={() => setShowExport(true)} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg flex items-center gap-2">
-                    <Download className="w-4 h-4" /> Export
-                  </button>
-                  <button onClick={() => setShowSetup(true)} className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-4 py-2 rounded border-2 border-stone-950 shadow-lg flex items-center gap-2">
-                    <Settings className="w-4 h-4" /> Setup
-                  </button>
+                <div className="space-y-2 mt-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <input
+                      type="number"
+                      value={kcInput}
+                      onChange={(e) => setKcInput(e.target.value)}
+                      placeholder="Run Count"
+                      className="bg-stone-800 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 w-40"
+                    />
+                    <button onClick={setKCManual} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg flex items-center justify-center min-w-32">
+                      Set Run Count
+                    </button>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => setShowImport(true)} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
+                      <Upload className="w-4 h-4" /> Import
+                    </button>
+                    <button onClick={() => setShowExport(true)} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
+                      <Download className="w-4 h-4" /> Export
+                    </button>
+                    <button onClick={() => setShowSetup(true)} className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-4 py-2 rounded border-2 border-stone-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
+                      <Settings className="w-4 h-4" /> Setup
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -468,11 +468,11 @@ const BarrowsTracker = () => {
                 setExpandedBrothers={setExpandedBrothers}
               />
             ) : (
-              <StatisticsTab 
-                stats={stats} 
+              <StatisticsTab
+                stats={stats}
                 editingDrop={editingDrop}
                 setEditingDrop={setEditingDrop}
-                updateDropKC={updateDropKC}
+                updateDrop={updateDrop}
                 removeDrop={removeDrop}
               />
             )}
@@ -564,6 +564,10 @@ const SetupScreen = ({ onComplete, onSkip, hasExistingData }) => {
 };
 
 const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion, expandedBrothers, setExpandedBrothers }) => {
+  const [compactView, setCompactView] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(false);
+  const [showOnlyMissing, setShowOnlyMissing] = useState(false);
+
   const handleItemClick = (e, itemName) => {
     // Shift+click or right-click to decrement
     if (e.shiftKey || e.button === 2) {
@@ -595,84 +599,173 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
     setExpandedBrothers(allCollapsed);
   };
 
+  // Filter brothers based on settings
+  const filteredBrothers = Object.entries(BARROWS_DATA).filter(([brother]) => {
+    if (hideCompleted) {
+      const completion = getBrotherCompletion(brother);
+      return !completion.complete;
+    }
+    return true;
+  });
+
   return (
     <div className="space-y-4">
-      {/* Expand/Collapse All */}
-      <div className="flex gap-2 justify-end">
-        <button
-          onClick={expandAll}
-          className="text-amber-300 hover:text-amber-200 text-sm font-semibold px-3 py-1 border border-amber-800 rounded"
-        >
-          Expand All
-        </button>
-        <button
-          onClick={collapseAll}
-          className="text-amber-300 hover:text-amber-200 text-sm font-semibold px-3 py-1 border border-amber-800 rounded"
-        >
-          Collapse All
-        </button>
+      {/* Controls */}
+      <div className="flex flex-wrap gap-4 items-center justify-between bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg p-3 border-2 border-amber-800">
+        {/* View Controls */}
+        <div className="flex gap-2">
+          <button
+            onClick={expandAll}
+            className="text-amber-300 hover:text-amber-200 text-sm font-semibold px-3 py-1 border border-amber-800 rounded"
+          >
+            Expand All
+          </button>
+          <button
+            onClick={collapseAll}
+            className="text-amber-300 hover:text-amber-200 text-sm font-semibold px-3 py-1 border border-amber-800 rounded"
+          >
+            Collapse All
+          </button>
+        </div>
+
+        {/* Filter & Display Options */}
+        <div className="flex flex-wrap gap-4 items-center">
+          <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
+            <input
+              type="checkbox"
+              checked={compactView}
+              onChange={(e) => setCompactView(e.target.checked)}
+              className="w-4 h-4 accent-amber-500"
+            />
+            Compact View
+          </label>
+          <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
+            <input
+              type="checkbox"
+              checked={hideCompleted}
+              onChange={(e) => setHideCompleted(e.target.checked)}
+              className="w-4 h-4 accent-amber-500"
+            />
+            Hide Completed Sets
+          </label>
+          <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showOnlyMissing}
+              onChange={(e) => setShowOnlyMissing(e.target.checked)}
+              className="w-4 h-4 accent-amber-500"
+            />
+            Show Only Missing
+          </label>
+        </div>
       </div>
 
-      {Object.entries(BARROWS_DATA).map(([brother, items]) => {
-        const completion = getBrotherCompletion(brother);
-        const isExpanded = expandedBrothers[brother];
+      {/* Brothers Grid - 2 columns on larger screens */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {filteredBrothers.map(([brother, items]) => {
+          const completion = getBrotherCompletion(brother);
+          const isExpanded = expandedBrothers[brother];
 
-        return (
-          <div key={brother} className={`bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg p-4 border-3 shadow-xl ${completion.complete ? 'border-4 border-emerald-500 shadow-emerald-900/50' : 'border-3 border-amber-800'}`}>
-            <div
-              className="flex items-center justify-between mb-3 cursor-pointer"
-              onClick={() => toggleBrother(brother)}
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-amber-300">{isExpanded ? '▼' : '▶'}</span>
-                <h3 className="text-2xl font-bold rs-text-gold">{brother}</h3>
+          // Filter items based on showOnlyMissing
+          const filteredItems = showOnlyMissing
+            ? items.filter(item => !drops[item.name])
+            : items;
+
+          // Skip rendering if all items are filtered out
+          if (showOnlyMissing && filteredItems.length === 0) return null;
+
+          return (
+            <div key={brother} className={`bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg p-4 shadow-xl ${completion.complete ? 'border-4 border-emerald-500 shadow-emerald-900/50' : 'border-2 border-amber-800'}`}>
+              <div
+                className="flex items-center justify-between mb-3 cursor-pointer"
+                onClick={() => toggleBrother(brother)}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-300">{isExpanded ? '▼' : '▶'}</span>
+                  <h3 className="text-xl font-bold rs-text-gold">{brother}</h3>
+                </div>
+                <span className={`px-3 py-1 rounded text-sm font-bold border-2 ${completion.complete ? 'bg-gradient-to-b from-emerald-600 to-emerald-800 text-white border-emerald-950 shadow-lg' : 'bg-gradient-to-b from-amber-800 to-amber-950 text-amber-200 border-amber-950'}`}>
+                  {completion.obtained}/{completion.total}
+                </span>
               </div>
-              <span className={`px-4 py-1 rounded text-sm font-bold border-2 ${completion.complete ? 'bg-gradient-to-b from-emerald-600 to-emerald-800 text-white border-emerald-950 shadow-lg' : 'bg-gradient-to-b from-amber-800 to-amber-950 text-amber-200 border-amber-950'}`}>
-                {completion.obtained}/{completion.total}
-              </span>
-            </div>
 
-            {isExpanded && (
-              <>
-                <div className="text-amber-300 text-xs mb-3 font-semibold">
-                  Left-click to add • Shift+click or right-click to remove
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {items.map(item => {
-                    const count = drops[item.name] || 0;
-                    const obtained = count > 0;
-                    return (
-                      <button
-                        key={item.name}
-                        onClick={(e) => handleItemClick(e, item.name)}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          onQuickRemove(item.name);
-                        }}
-                        className={`flex items-center gap-3 p-3 rounded transition-all border-2 shadow-md ${
-                          obtained ? 'bg-gradient-to-b from-emerald-700 to-emerald-900 hover:from-emerald-600 hover:to-emerald-800 border-emerald-950' : 'bg-gradient-to-b from-stone-800 to-stone-950 hover:from-stone-700 hover:to-stone-900 border-stone-950'
-                        }`}
-                      >
-                        <img src={item.img} alt={item.name} className="w-12 h-12 object-contain" />
-                        <div className="flex-1 text-left">
-                          <div className="text-amber-100 text-sm font-bold">{item.name}</div>
-                          {obtained && <div className="text-emerald-300 text-xs font-semibold">x{count}</div>}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        );
-      })}
+              {isExpanded && (
+                <>
+                  {!compactView && (
+                    <div className="text-amber-300 text-xs mb-3 font-semibold">
+                      Left-click to add • Shift+click or right-click to remove
+                    </div>
+                  )}
+                  {compactView ? (
+                    // Compact View - Icons only
+                    <div className="flex flex-wrap gap-2">
+                      {filteredItems.map(item => {
+                        const count = drops[item.name] || 0;
+                        const obtained = count > 0;
+                        return (
+                          <button
+                            key={item.name}
+                            onClick={(e) => handleItemClick(e, item.name)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              onQuickRemove(item.name);
+                            }}
+                            title={`${item.name}${obtained ? ` (x${count})` : ''}`}
+                            className={`relative p-2 rounded transition-all border-2 shadow-md ${
+                              obtained ? 'bg-gradient-to-b from-emerald-700 to-emerald-900 hover:from-emerald-600 hover:to-emerald-800 border-emerald-950' : 'bg-gradient-to-b from-stone-800 to-stone-950 hover:from-stone-700 hover:to-stone-900 border-stone-950'
+                            }`}
+                          >
+                            <img src={item.img} alt={item.name} className="w-10 h-10 object-contain" />
+                            {obtained && (
+                              <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center border border-emerald-700">
+                                {count}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    // Full View - Icons with names
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
+                      {filteredItems.map(item => {
+                        const count = drops[item.name] || 0;
+                        const obtained = count > 0;
+                        return (
+                          <button
+                            key={item.name}
+                            onClick={(e) => handleItemClick(e, item.name)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              onQuickRemove(item.name);
+                            }}
+                            className={`flex items-center gap-2 p-2 rounded transition-all border-2 shadow-md ${
+                              obtained ? 'bg-gradient-to-b from-emerald-700 to-emerald-900 hover:from-emerald-600 hover:to-emerald-800 border-emerald-950' : 'bg-gradient-to-b from-stone-800 to-stone-950 hover:from-stone-700 hover:to-stone-900 border-stone-950'
+                            }`}
+                          >
+                            <img src={item.img} alt={item.name} className="w-10 h-10 object-contain" />
+                            <div className="flex-1 text-left min-w-0">
+                              <div className="text-amber-100 text-sm font-bold truncate">{item.name}</div>
+                              {obtained && <div className="text-emerald-300 text-xs font-semibold">x{count}</div>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
 
-const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDropKC, removeDrop }) => {
+const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeDrop }) => {
   const [editKC, setEditKC] = useState('');
+  const [editDate, setEditDate] = useState('');
   const [sortConfig, setSortConfig] = useState({ column: null, direction: 'asc' });
 
   const handleSort = (column) => {
@@ -710,6 +803,10 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDropKC, remov
         case 'dryStreak':
           aVal = a.dryStreak;
           bVal = b.dryStreak;
+          break;
+        case 'timestamp':
+          aVal = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          bVal = b.timestamp ? new Date(b.timestamp).getTime() : 0;
           break;
         default:
           return 0;
@@ -757,6 +854,12 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDropKC, remov
               >
                 Dry Streak<SortIcon column="dryStreak" />
               </th>
+              <th
+                className="px-4 py-3 text-left rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
+                onClick={() => handleSort('timestamp')}
+              >
+                Date<SortIcon column="timestamp" />
+              </th>
               <th className="px-4 py-3 text-left rs-text-gold font-bold">Actions</th>
             </tr>
           </thead>
@@ -767,16 +870,44 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDropKC, remov
                 <td className="px-4 py-3 text-amber-100 font-semibold">{drop.item}</td>
                 <td className="px-4 py-3 text-amber-100">
                   {editingDrop === drop.id ? (
-                    <div className="flex gap-2">
+                    <input
+                      type="number"
+                      value={editKC}
+                      onChange={(e) => setEditKC(e.target.value)}
+                      className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-900 w-24"
+                      autoFocus
+                    />
+                  ) : (
+                    <span className="font-semibold">{drop.killCount}</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-amber-200 font-semibold">{drop.dryStreak}</td>
+                <td className="px-4 py-3 text-amber-200">
+                  {editingDrop === drop.id ? (
+                    <div className="flex gap-2 items-center">
                       <input
-                        type="number"
-                        value={editKC}
-                        onChange={(e) => setEditKC(e.target.value)}
-                        className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-900 w-24"
-                        autoFocus
+                        type="date"
+                        value={editDate}
+                        onChange={(e) => setEditDate(e.target.value)}
+                        className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-900 w-32"
                       />
                       <button
-                        onClick={() => updateDropKC(drop.id, parseInt(editKC))}
+                        onClick={() => setEditDate('')}
+                        className="text-amber-400 hover:text-amber-300 text-xs font-bold"
+                        title="Clear date"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="font-semibold">{drop.timestamp ? new Date(drop.timestamp).toLocaleDateString() : '-'}</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  {editingDrop === drop.id ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateDrop(drop.id, parseInt(editKC), editDate ? new Date(editDate).toISOString() : null)}
                         className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-2 py-1 rounded text-sm border-2 border-amber-950 font-bold"
                       >
                         Save
@@ -789,28 +920,25 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDropKC, remov
                       </button>
                     </div>
                   ) : (
-                    <span className="font-semibold">{drop.killCount}</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingDrop(drop.id);
+                          setEditKC(drop.killCount.toString());
+                          setEditDate(drop.timestamp ? new Date(drop.timestamp).toISOString().split('T')[0] : '');
+                        }}
+                        className="text-blue-400 hover:text-blue-300"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => removeDrop(drop.id)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
-                </td>
-                <td className="px-4 py-3 text-amber-200 font-semibold">{drop.dryStreak}</td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setEditingDrop(drop.id);
-                        setEditKC(drop.killCount.toString());
-                      }}
-                      className="text-blue-400 hover:text-blue-300"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => removeDrop(drop.id)}
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
                 </td>
               </tr>
             ))}
