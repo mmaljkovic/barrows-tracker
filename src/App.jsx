@@ -55,7 +55,7 @@ const BARROWS_DATA = {
     { name: "Linza's hammer", img: '/barrows-items/Linzas_hammer.png' },
     { name: "Linza's shield", img: '/barrows-items/Linzas_shield.png' }
   ],
-  'Shared': [
+  'General': [
     { name: "Amulet of the forsaken", img: '/barrows-items/Amulet_of_the_forsaken.png' },
     { name: "Corruption sigil", img: '/barrows-items/Corruption_sigil.png' }
   ]
@@ -82,8 +82,9 @@ const BarrowsTracker = () => {
     'Torag': true,
     'Verac': true,
     'Linza': true,
-    'Shared': true
+    'General': true
   });
+  const [hideCorruptionSigil, setHideCorruptionSigil] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -507,6 +508,8 @@ const BarrowsTracker = () => {
                 setEditingDrop={setEditingDrop}
                 updateDrop={updateDrop}
                 removeDrop={removeDrop}
+                hideCorruptionSigil={hideCorruptionSigil}
+                setHideCorruptionSigil={setHideCorruptionSigil}
               />
             )}
           </div>
@@ -796,7 +799,7 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
   );
 };
 
-const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeDrop }) => {
+const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil }) => {
   const [editKC, setEditKC] = useState('');
   const [editDate, setEditDate] = useState('');
   const [sortConfig, setSortConfig] = useState({ column: null, direction: 'asc' });
@@ -864,8 +867,26 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeD
 
   const sortedData = getSortedData();
 
+  // Filter out Corruption sigil if toggle is enabled
+  const filteredData = hideCorruptionSigil
+    ? sortedData.filter(drop => drop.item !== 'Corruption sigil')
+    : sortedData;
+
   return (
     <div className="space-y-6">
+      {/* Filter Controls */}
+      <div className="flex justify-end">
+        <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
+          <input
+            type="checkbox"
+            checked={hideCorruptionSigil}
+            onChange={(e) => setHideCorruptionSigil(e.target.checked)}
+            className="w-4 h-4 accent-amber-500"
+          />
+          Hide Corruption Sigil
+        </label>
+      </div>
+
       <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg overflow-hidden overflow-x-auto border-2 border-amber-900 shadow-xl">
         <table className="w-full">
           <thead className="bg-gradient-to-b from-amber-800 to-amber-950">
@@ -899,7 +920,7 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeD
             </tr>
           </thead>
           <tbody>
-            {sortedData.map((drop, idx) => (
+            {filteredData.map((drop, idx) => (
               <tr key={drop.id} className="border-t-2 border-amber-900 hover:bg-stone-700">
                 <td className="px-4 py-3 text-amber-200 font-semibold">{idx + 1}</td>
                 <td className="px-4 py-3 text-amber-100 font-semibold">{drop.item}</td>
