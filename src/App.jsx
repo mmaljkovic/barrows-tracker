@@ -193,14 +193,29 @@ const BarrowsTracker = () => {
   const calculateStats = () => {
     const uniquesObtained = Object.keys(drops).length;
     const totalDrops = Object.values(drops).reduce((sum, count) => sum + count, 0);
-    const sortedHistory = [...dropHistory].sort((a, b) => a.killCount - b.killCount);
-    
+
+    // Separate drops with known and unknown kill counts
+    const knownKCDrops = dropHistory.filter(d => d.killCount != null);
+    const unknownKCDrops = dropHistory.filter(d => d.killCount == null);
+
+    // Sort known KC drops and calculate dry streaks
+    const sortedKnown = [...knownKCDrops].sort((a, b) => a.killCount - b.killCount);
+
     let lastKC = 0;
-    const dropsWithDryStreak = sortedHistory.map(drop => {
+    const knownWithDryStreak = sortedKnown.map(drop => {
       const dryStreak = drop.killCount - lastKC;
       lastKC = drop.killCount;
       return { ...drop, dryStreak };
     });
+
+    // Unknown KC drops have null dry streak
+    const unknownWithDryStreak = unknownKCDrops.map(drop => ({
+      ...drop,
+      dryStreak: null
+    }));
+
+    // Combine: known drops first (sorted), then unknown
+    const dropsWithDryStreak = [...knownWithDryStreak, ...unknownWithDryStreak];
 
     return { uniquesObtained, totalDrops, dropsWithDryStreak };
   };
@@ -259,27 +274,31 @@ const BarrowsTracker = () => {
       // Skip empty lines and comments
       if (!trimmed || trimmed.startsWith('#')) return;
 
-      // Split by pipe
+      // Split by pipe - supports both "KC | Item" and "KC | Item | Date" formats
       const parts = trimmed.split('|');
-      if (parts.length !== 2) {
+      if (parts.length < 2 || parts.length > 3) {
         errors.push({
           line: index + 1,
-          message: `Invalid format. Expected "Run Count | Item". Got: "${trimmed}"`
+          message: `Invalid format. Expected "Run Count | Item" or "Run Count | Item | Date". Got: "${trimmed}"`
         });
         return;
       }
 
       const kcStr = parts[0].trim();
       const itemName = parts[1].trim();
+      const dateStr = parts.length === 3 ? parts[2].trim() : null;
 
-      // Validate KC
-      const kc = parseInt(kcStr);
-      if (isNaN(kc) || kc < 0) {
-        errors.push({
-          line: index + 1,
-          message: `Invalid run count "${kcStr}". Must be a positive number.`
-        });
-        return;
+      // Validate KC - allow "-" for unknown
+      let kc = null;
+      if (kcStr !== '-') {
+        kc = parseInt(kcStr);
+        if (isNaN(kc) || kc < 0) {
+          errors.push({
+            line: index + 1,
+            message: `Invalid run count "${kcStr}". Must be a positive number or "-".`
+          });
+          return;
+        }
       }
 
       // Validate item name
@@ -291,7 +310,21 @@ const BarrowsTracker = () => {
         return;
       }
 
-      success.push({ killCount: kc, item: itemName });
+      // Parse date if provided (and not "-")
+      let timestamp = null;
+      if (dateStr && dateStr !== '-') {
+        const parsedDate = new Date(dateStr);
+        if (isNaN(parsedDate.getTime())) {
+          errors.push({
+            line: index + 1,
+            message: `Invalid date "${dateStr}". Use YYYY-MM-DD format.`
+          });
+          return;
+        }
+        timestamp = parsedDate.toISOString();
+      }
+
+      success.push({ killCount: kc, item: itemName, timestamp });
     });
 
     return { success, errors };
@@ -315,7 +348,7 @@ const BarrowsTracker = () => {
         id: Date.now() + Math.random(),
         item: entry.item,
         killCount: entry.killCount,
-        timestamp: new Date().toISOString()
+        timestamp: entry.timestamp || null
       };
       newHistory.push(dropEntry);
       newDrops[entry.item] = (newDrops[entry.item] || 0) + 1;
@@ -336,7 +369,7 @@ const BarrowsTracker = () => {
         id: Date.now() + Math.random(),
         item: entry.item,
         killCount: entry.killCount,
-        timestamp: new Date().toISOString()
+        timestamp: entry.timestamp || null
       };
       newHistory.push(dropEntry);
       newDrops[entry.item] = (newDrops[entry.item] || 0) + 1;
@@ -797,12 +830,14 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeD
             ? aVal.localeCompare(bVal)
             : bVal.localeCompare(aVal);
         case 'killCount':
-          aVal = a.killCount;
-          bVal = b.killCount;
+          // Null values sort to the end
+          aVal = a.killCount ?? Infinity;
+          bVal = b.killCount ?? Infinity;
           break;
         case 'dryStreak':
-          aVal = a.dryStreak;
-          bVal = b.dryStreak;
+          // Null values sort to the end
+          aVal = a.dryStreak ?? Infinity;
+          bVal = b.dryStreak ?? Infinity;
           break;
         case 'timestamp':
           aVal = a.timestamp ? new Date(a.timestamp).getTime() : 0;
@@ -870,18 +905,27 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeD
                 <td className="px-4 py-3 text-amber-100 font-semibold">{drop.item}</td>
                 <td className="px-4 py-3 text-amber-100">
                   {editingDrop === drop.id ? (
-                    <input
-                      type="number"
-                      value={editKC}
-                      onChange={(e) => setEditKC(e.target.value)}
-                      className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-900 w-24"
-                      autoFocus
-                    />
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="number"
+                        value={editKC}
+                        onChange={(e) => setEditKC(e.target.value)}
+                        className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-900 w-24"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => setEditKC('')}
+                        className="text-amber-400 hover:text-amber-300 text-xs font-bold"
+                        title="Clear run count"
+                      >
+                        Clear
+                      </button>
+                    </div>
                   ) : (
-                    <span className="font-semibold">{drop.killCount}</span>
+                    <span className="font-semibold">{drop.killCount ?? '-'}</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-amber-200 font-semibold">{drop.dryStreak}</td>
+                <td className="px-4 py-3 text-amber-200 font-semibold">{drop.dryStreak ?? '-'}</td>
                 <td className="px-4 py-3 text-amber-200">
                   {editingDrop === drop.id ? (
                     <div className="flex gap-2 items-center">
@@ -907,7 +951,7 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeD
                   {editingDrop === drop.id ? (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => updateDrop(drop.id, parseInt(editKC), editDate ? new Date(editDate).toISOString() : null)}
+                        onClick={() => updateDrop(drop.id, editKC === '' ? null : parseInt(editKC), editDate ? new Date(editDate).toISOString() : null)}
                         className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-2 py-1 rounded text-sm border-2 border-amber-950 font-bold"
                       >
                         Save
@@ -924,7 +968,7 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeD
                       <button
                         onClick={() => {
                           setEditingDrop(drop.id);
-                          setEditKC(drop.killCount.toString());
+                          setEditKC(drop.killCount != null ? drop.killCount.toString() : '');
                           setEditDate(drop.timestamp ? new Date(drop.timestamp).toISOString().split('T')[0] : '');
                         }}
                         className="text-blue-400 hover:text-blue-300"
@@ -1241,27 +1285,31 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
       // Skip empty lines and comments
       if (!trimmed || trimmed.startsWith('#')) return;
 
-      // Split by pipe
+      // Split by pipe - supports both "KC | Item" and "KC | Item | Date" formats
       const parts = trimmed.split('|');
-      if (parts.length !== 2) {
+      if (parts.length < 2 || parts.length > 3) {
         errors.push({
           line: index + 1,
-          message: `Invalid format. Expected "Run Count | Item". Got: "${trimmed}"`
+          message: `Invalid format. Expected "Run Count | Item" or "Run Count | Item | Date". Got: "${trimmed}"`
         });
         return;
       }
 
       const kcStr = parts[0].trim();
       const itemName = parts[1].trim();
+      const dateStr = parts.length === 3 ? parts[2].trim() : null;
 
-      // Validate KC
-      const kc = parseInt(kcStr);
-      if (isNaN(kc) || kc < 0) {
-        errors.push({
-          line: index + 1,
-          message: `Invalid run count "${kcStr}". Must be a positive number.`
-        });
-        return;
+      // Validate KC - allow "-" for unknown
+      let kc = null;
+      if (kcStr !== '-') {
+        kc = parseInt(kcStr);
+        if (isNaN(kc) || kc < 0) {
+          errors.push({
+            line: index + 1,
+            message: `Invalid run count "${kcStr}". Must be a positive number or "-".`
+          });
+          return;
+        }
       }
 
       // Validate item name
@@ -1273,7 +1321,21 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
         return;
       }
 
-      success.push({ killCount: kc, item: itemName });
+      // Parse date if provided (and not "-")
+      let timestamp = null;
+      if (dateStr && dateStr !== '-') {
+        const parsedDate = new Date(dateStr);
+        if (isNaN(parsedDate.getTime())) {
+          errors.push({
+            line: index + 1,
+            message: `Invalid date "${dateStr}". Use YYYY-MM-DD format.`
+          });
+          return;
+        }
+        timestamp = parsedDate.toISOString();
+      }
+
+      success.push({ killCount: kc, item: itemName, timestamp });
     });
 
     return { success, errors };
@@ -1398,7 +1460,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
                   setImportText(e.target.value);
                   setValidationResult(null);
                 }}
-                placeholder="Paste your export data here (format: Run Count | Item)&#10;Example:&#10;1 | Ahrim's staff&#10;5 | Dharok's helm&#10;10 | Karil's crossbow"
+                placeholder="Paste your export data here (format: Run Count | Item | Date)&#10;Example:&#10;1 | Ahrim's staff | 2025-01-15&#10;5 | Dharok's helm | 2025-01-20&#10;- | Karil's crossbow | -"
                 className="w-full h-64 bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 font-mono text-sm"
               />
             </div>
@@ -1523,8 +1585,18 @@ const ExportModal = ({ dropHistory, onClose }) => {
   const exportText = dropHistory.length > 0
     ? dropHistory
         .slice()
-        .sort((a, b) => a.killCount - b.killCount)
-        .map(drop => `${drop.killCount} | ${drop.item}`)
+        .sort((a, b) => {
+          // Sort nulls to end
+          if (a.killCount == null && b.killCount == null) return 0;
+          if (a.killCount == null) return 1;
+          if (b.killCount == null) return -1;
+          return a.killCount - b.killCount;
+        })
+        .map(drop => {
+          const kc = drop.killCount ?? '-';
+          const date = drop.timestamp ? drop.timestamp.split('T')[0] : '-';
+          return `${kc} | ${drop.item} | ${date}`;
+        })
         .join('\n')
     : '';
 
