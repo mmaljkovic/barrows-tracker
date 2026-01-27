@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Settings, Award, ArrowLeft, Download, Upload } from 'lucide-react';
+import { Plus, Edit2, Trash2, Settings, Award, ArrowLeft, Download, Upload, LogIn } from 'lucide-react';
+import { useAuth } from './contexts/AuthContext';
+import { useBarrowsData } from './hooks/useBarrowsData';
+import AuthModal from './components/Auth/AuthModal';
+import UserMenu from './components/Auth/UserMenu';
 
 const BARROWS_DATA = {
   'Ahrim': [
@@ -62,11 +66,33 @@ const BARROWS_DATA = {
 };
 
 const BarrowsTracker = () => {
+  // Auth state
+  const { user, loading: authLoading, isConfigured } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showMigrationPrompt, setShowMigrationPrompt] = useState(false);
+
+  // Data from Supabase/localStorage hook
+  const {
+    killCount,
+    drops,
+    dropHistory,
+    loading: dataLoading,
+    error: dataError,
+    hasLocalData,
+    isAuthenticated,
+    incrementKC,
+    setKCManual: setKCManualHook,
+    addDrops,
+    removeDrop,
+    updateDrop,
+    mergeImportedData,
+    replaceWithImportedData,
+    migrateLocalDataToSupabase,
+  } = useBarrowsData();
+
+  // UI state
   const [activeTab, setActiveTab] = useState('collection');
-  const [killCount, setKillCount] = useState(0);
-  const [drops, setDrops] = useState({});
-  const [dropHistory, setDropHistory] = useState([]);
-  const [showSetup, setShowSetup] = useState(true);
+  const [showSetup, setShowSetup] = useState(false);
   const [showAddDrop, setShowAddDrop] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -86,68 +112,17 @@ const BarrowsTracker = () => {
   });
   const [hideCorruptionSigil, setHideCorruptionSigil] = useState(false);
 
+  // Show migration prompt when user logs in and has local data
   useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = () => {
-    const savedKC = localStorage.getItem('rs3-barrows-kc');
-    const savedDrops = localStorage.getItem('rs3-barrows-drops');
-    const savedHistory = localStorage.getItem('rs3-barrows-history');
-
-    if (savedKC) {
-      setKillCount(parseInt(savedKC));
-      setShowSetup(false);
+    if (isAuthenticated && hasLocalData && !showMigrationPrompt) {
+      setShowMigrationPrompt(true);
     }
-    if (savedDrops) setDrops(JSON.parse(savedDrops));
-    if (savedHistory) setDropHistory(JSON.parse(savedHistory));
-  };
+  }, [isAuthenticated, hasLocalData]);
 
-  const saveData = (kc, dropsData, history) => {
-    localStorage.setItem('rs3-barrows-kc', kc.toString());
-    localStorage.setItem('rs3-barrows-drops', JSON.stringify(dropsData));
-    localStorage.setItem('rs3-barrows-history', JSON.stringify(history));
-  };
-
-  const handleSetup = (initialKC, initialDrops, initialHistory) => {
-    setKillCount(initialKC);
-    setDrops(initialDrops);
-    setDropHistory(initialHistory);
-    saveData(initialKC, initialDrops, initialHistory);
-    setShowSetup(false);
-  };
-
-  const incrementKC = () => {
-    const newKC = killCount + 1;
-    setKillCount(newKC);
-    saveData(newKC, drops, dropHistory);
-  };
-
-  const setKCManual = () => {
+  const handleSetKCManual = () => {
     const newKC = parseInt(kcInput) || 0;
-    setKillCount(newKC);
+    setKCManualHook(newKC);
     setKcInput('');
-    saveData(newKC, drops, dropHistory);
-  };
-
-  const addDrops = (items, kc) => {
-    const newDrops = { ...drops };
-    const newHistory = [...dropHistory];
-    const timestamp = new Date().toISOString();
-    
-    items.forEach(itemName => {
-      newDrops[itemName] = (newDrops[itemName] || 0) + 1;
-      newHistory.push({
-        id: Date.now() + Math.random(),
-        item: itemName,
-        killCount: kc,
-        timestamp
-      });
-    });
-
-    setDrops(newDrops);
-    setDropHistory(newHistory);
-    saveData(killCount, newDrops, newHistory);
   };
 
   const quickAddDrop = (itemName) => {
@@ -167,28 +142,26 @@ const BarrowsTracker = () => {
     removeDrop(mostRecent.id);
   };
 
-  const removeDrop = (historyId) => {
-    const dropToRemove = dropHistory.find(d => d.id === historyId);
-    if (!dropToRemove) return;
-
-    const newDrops = { ...drops };
-    newDrops[dropToRemove.item] = Math.max(0, (newDrops[dropToRemove.item] || 0) - 1);
-    if (newDrops[dropToRemove.item] === 0) delete newDrops[dropToRemove.item];
-
-    const newHistory = dropHistory.filter(d => d.id !== historyId);
-
-    setDrops(newDrops);
-    setDropHistory(newHistory);
-    saveData(killCount, newDrops, newHistory);
+  const handleUpdateDrop = (historyId, newKC, newDate) => {
+    updateDrop(historyId, newKC, newDate);
+    setEditingDrop(null);
   };
 
-  const updateDrop = (historyId, newKC, newDate) => {
-    const newHistory = dropHistory.map(d =>
-      d.id === historyId ? { ...d, killCount: newKC, timestamp: newDate } : d
-    );
-    setDropHistory(newHistory);
-    saveData(killCount, drops, newHistory);
-    setEditingDrop(null);
+  const handleMigrate = async () => {
+    await migrateLocalDataToSupabase();
+    setShowMigrationPrompt(false);
+  };
+
+  const handleSkipMigration = () => {
+    setShowMigrationPrompt(false);
+  };
+
+  // Handle setup/reset screen completion
+  const handleSetup = (initialKC) => {
+    if (initialKC > 0) {
+      setKCManualHook(initialKC);
+    }
+    setShowSetup(false);
   };
 
   const calculateStats = () => {
@@ -340,48 +313,6 @@ const BarrowsTracker = () => {
     });
   };
 
-  const mergeImportedData = (parsedEntries) => {
-    const newHistory = [...dropHistory];
-    const newDrops = { ...drops };
-
-    parsedEntries.forEach(entry => {
-      const dropEntry = {
-        id: Date.now() + Math.random(),
-        item: entry.item,
-        killCount: entry.killCount,
-        timestamp: entry.timestamp || null
-      };
-      newHistory.push(dropEntry);
-      newDrops[entry.item] = (newDrops[entry.item] || 0) + 1;
-    });
-
-    setDropHistory(newHistory);
-    setDrops(newDrops);
-    saveData(killCount, newDrops, newHistory);
-  };
-
-  const replaceWithImportedData = (parsedEntries) => {
-    const newHistory = [];
-    const newDrops = {};
-    let maxKC = 0;
-
-    parsedEntries.forEach(entry => {
-      const dropEntry = {
-        id: Date.now() + Math.random(),
-        item: entry.item,
-        killCount: entry.killCount,
-        timestamp: entry.timestamp || null
-      };
-      newHistory.push(dropEntry);
-      newDrops[entry.item] = (newDrops[entry.item] || 0) + 1;
-      maxKC = Math.max(maxKC, entry.killCount);
-    });
-
-    setKillCount(maxKC);
-    setDropHistory(newHistory);
-    setDrops(newDrops);
-    saveData(maxKC, newDrops, newHistory);
-  };
 
   if (showSetup) {
     return <SetupScreen onComplete={handleSetup} onSkip={() => setShowSetup(false)} hasExistingData={killCount > 0} />;
@@ -403,7 +334,21 @@ const BarrowsTracker = () => {
                 <p className="text-amber-200 font-semibold text-sm tracking-wider">RUNESCAPE 3</p>
               </div>
             </div>
-            {isComplete && <Award className="w-12 h-12 text-yellow-300 animate-pulse drop-shadow-[0_0_8px_rgba(253,224,71,0.5)]" />}
+            <div className="flex items-center gap-3">
+              {isComplete && <Award className="w-12 h-12 text-yellow-300 animate-pulse drop-shadow-[0_0_8px_rgba(253,224,71,0.5)]" />}
+              {isConfigured && (
+                isAuthenticated ? (
+                  <UserMenu />
+                ) : (
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="flex items-center gap-2 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-900 shadow-lg font-semibold text-sm"
+                  >
+                    <LogIn className="w-4 h-4" /> Sign In
+                  </button>
+                )
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
@@ -454,7 +399,7 @@ const BarrowsTracker = () => {
                       placeholder="Run Count"
                       className="bg-stone-800 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 w-40"
                     />
-                    <button onClick={setKCManual} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg flex items-center justify-center min-w-32">
+                    <button onClick={handleSetKCManual} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg flex items-center justify-center min-w-32">
                       Set Run Count
                     </button>
                   </div>
@@ -506,7 +451,7 @@ const BarrowsTracker = () => {
                 stats={stats}
                 editingDrop={editingDrop}
                 setEditingDrop={setEditingDrop}
-                updateDrop={updateDrop}
+                updateDrop={handleUpdateDrop}
                 removeDrop={removeDrop}
                 hideCorruptionSigil={hideCorruptionSigil}
                 setHideCorruptionSigil={setHideCorruptionSigil}
@@ -538,6 +483,17 @@ const BarrowsTracker = () => {
           onClose={() => setShowImport(false)}
         />
       )}
+
+      {showAuthModal && (
+        <AuthModal onClose={() => setShowAuthModal(false)} />
+      )}
+
+      {showMigrationPrompt && (
+        <MigrationModal
+          onMigrate={handleMigrate}
+          onSkip={handleSkipMigration}
+        />
+      )}
     </div>
   );
 };
@@ -546,7 +502,7 @@ const SetupScreen = ({ onComplete, onSkip, hasExistingData }) => {
   const [kc, setKc] = useState('');
 
   const handleFinish = () => {
-    onComplete(parseInt(kc) || 0, {}, []);
+    onComplete(parseInt(kc) || 0);
   };
 
   return (
@@ -1705,6 +1661,46 @@ const ExportModal = ({ dropHistory, onClose }) => {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+};
+
+const MigrationModal = ({ onMigrate, onSkip }) => {
+  const [isMigrating, setIsMigrating] = useState(false);
+
+  const handleMigrate = async () => {
+    setIsMigrating(true);
+    await onMigrate();
+    setIsMigrating(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
+      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-md w-full border-4 border-amber-900 rs-border">
+        <h3 className="text-2xl font-bold rs-text-gold mb-4">Import Local Data?</h3>
+        <p className="text-amber-200 mb-4">
+          We found existing drop data saved on this device. Would you like to import it to your account?
+        </p>
+        <p className="text-amber-300 text-sm mb-6">
+          This will merge your local data with your cloud account, allowing you to access it from any device.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={handleMigrate}
+            disabled={isMigrating}
+            className="flex-1 bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 disabled:from-stone-600 disabled:to-stone-800 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg font-bold"
+          >
+            {isMigrating ? 'Importing...' : 'Yes, Import Data'}
+          </button>
+          <button
+            onClick={onSkip}
+            disabled={isMigrating}
+            className="flex-1 bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-4 py-2 rounded border-2 border-stone-950 shadow-lg font-bold"
+          >
+            Skip
+          </button>
+        </div>
       </div>
     </div>
   );
