@@ -111,6 +111,7 @@ const BarrowsTracker = () => {
     'General': true
   });
   const [hideCorruptionSigil, setHideCorruptionSigil] = useState(false);
+  const [hideUnknownRuns, setHideUnknownRuns] = useState(false);
 
   // Show migration prompt when user logs in and has local data
   useEffect(() => {
@@ -191,7 +192,11 @@ const BarrowsTracker = () => {
     // Combine: known drops first (sorted), then unknown
     const dropsWithDryStreak = [...knownWithDryStreak, ...unknownWithDryStreak];
 
-    return { uniquesObtained, totalDrops, dropsWithDryStreak };
+    // Calculate current dry streak (runs since last known drop)
+    const lastKnownDropKC = sortedKnown.length > 0 ? sortedKnown[sortedKnown.length - 1].killCount : 0;
+    const currentDryStreak = killCount - lastKnownDropKC;
+
+    return { uniquesObtained, totalDrops, dropsWithDryStreak, currentDryStreak };
   };
 
   const getBrotherCompletion = (brother) => {
@@ -351,18 +356,22 @@ const BarrowsTracker = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
               <div className="text-amber-200 text-sm font-semibold">Run Count</div>
               <div className="text-2xl font-bold rs-text-gold">{killCount}</div>
             </div>
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold">Unique Items</div>
-              <div className="text-2xl font-bold text-amber-400">{stats.uniquesObtained}/{totalUniques}</div>
+              <div className="text-amber-200 text-sm font-semibold">Dry Streak</div>
+              <div className="text-2xl font-bold text-orange-400">{stats.currentDryStreak}</div>
             </div>
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
               <div className="text-amber-200 text-sm font-semibold">Total Drops</div>
               <div className="text-2xl font-bold text-emerald-400">{stats.totalDrops}</div>
+            </div>
+            <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
+              <div className="text-amber-200 text-sm font-semibold">Unique Items</div>
+              <div className="text-2xl font-bold text-amber-400">{stats.uniquesObtained}/{totalUniques}</div>
             </div>
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
               <div className="text-amber-200 text-sm font-semibold">Completion</div>
@@ -455,6 +464,8 @@ const BarrowsTracker = () => {
                 removeDrop={removeDrop}
                 hideCorruptionSigil={hideCorruptionSigil}
                 setHideCorruptionSigil={setHideCorruptionSigil}
+                hideUnknownRuns={hideUnknownRuns}
+                setHideUnknownRuns={setHideUnknownRuns}
               />
             )}
           </div>
@@ -755,7 +766,7 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
   );
 };
 
-const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil }) => {
+const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil, hideUnknownRuns, setHideUnknownRuns }) => {
   const [editKC, setEditKC] = useState('');
   const [editDate, setEditDate] = useState('');
   const [sortConfig, setSortConfig] = useState({ column: null, direction: 'asc' });
@@ -823,15 +834,28 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeD
 
   const sortedData = getSortedData();
 
-  // Filter out Corruption sigil if toggle is enabled
-  const filteredData = hideCorruptionSigil
-    ? sortedData.filter(drop => drop.item !== 'Corruption sigil')
-    : sortedData;
+  // Apply filters
+  let filteredData = sortedData;
+  if (hideCorruptionSigil) {
+    filteredData = filteredData.filter(drop => drop.item !== 'Corruption sigil');
+  }
+  if (hideUnknownRuns) {
+    filteredData = filteredData.filter(drop => drop.killCount != null);
+  }
 
   return (
     <div className="space-y-6">
       {/* Filter Controls */}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-6">
+        <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
+          <input
+            type="checkbox"
+            checked={hideUnknownRuns}
+            onChange={(e) => setHideUnknownRuns(e.target.checked)}
+            className="w-4 h-4 accent-amber-500"
+          />
+          Hide Unknown Runs
+        </label>
         <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
           <input
             type="checkbox"
