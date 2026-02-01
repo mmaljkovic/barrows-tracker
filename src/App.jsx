@@ -112,6 +112,7 @@ const BarrowsTracker = () => {
   });
   const [hideCorruptionSigil, setHideCorruptionSigil] = useState(false);
   const [hideUnknownRuns, setHideUnknownRuns] = useState(false);
+  const [showOnlyUniques, setShowOnlyUniques] = useState(false);
 
   // Show migration prompt when user logs in and has local data
   useEffect(() => {
@@ -167,7 +168,9 @@ const BarrowsTracker = () => {
 
   const calculateStats = () => {
     const uniquesObtained = Object.keys(drops).length;
-    const totalDrops = Object.values(drops).reduce((sum, count) => sum + count, 0);
+    const totalDrops = Object.entries(drops)
+      .filter(([item]) => item !== 'Corruption sigil')
+      .reduce((sum, [, count]) => sum + count, 0);
 
     // Separate drops with known and unknown kill counts
     const knownKCDrops = dropHistory.filter(d => d.killCount != null);
@@ -190,7 +193,15 @@ const BarrowsTracker = () => {
     }));
 
     // Combine: known drops first (sorted), then unknown
-    const dropsWithDryStreak = [...knownWithDryStreak, ...unknownWithDryStreak];
+    const combinedDrops = [...knownWithDryStreak, ...unknownWithDryStreak];
+
+    // Mark first occurrence of each item as unique
+    const seenItems = new Set();
+    const dropsWithDryStreak = combinedDrops.map(drop => {
+      const isFirstDrop = !seenItems.has(drop.item);
+      seenItems.add(drop.item);
+      return { ...drop, isFirstDrop };
+    });
 
     // Calculate current dry streak (runs since last known drop)
     const lastKnownDropKC = sortedKnown.length > 0 ? sortedKnown[sortedKnown.length - 1].killCount : 0;
@@ -441,7 +452,7 @@ const BarrowsTracker = () => {
               onClick={() => setActiveTab('statistics')}
               className={`flex-1 px-6 py-3 font-bold text-lg ${activeTab === 'statistics' ? 'bg-gradient-to-b from-amber-700 to-amber-900 text-yellow-100' : 'bg-gradient-to-b from-stone-700 to-stone-800 text-amber-200 hover:from-stone-600 hover:to-stone-700'}`}
             >
-              Statistics
+              Drop Log
             </button>
           </div>
 
@@ -466,6 +477,8 @@ const BarrowsTracker = () => {
                 setHideCorruptionSigil={setHideCorruptionSigil}
                 hideUnknownRuns={hideUnknownRuns}
                 setHideUnknownRuns={setHideUnknownRuns}
+                showOnlyUniques={showOnlyUniques}
+                setShowOnlyUniques={setShowOnlyUniques}
               />
             )}
           </div>
@@ -766,7 +779,7 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
   );
 };
 
-const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil, hideUnknownRuns, setHideUnknownRuns }) => {
+const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil, hideUnknownRuns, setHideUnknownRuns, showOnlyUniques, setShowOnlyUniques }) => {
   const [editKC, setEditKC] = useState('');
   const [editDate, setEditDate] = useState('');
   const [sortConfig, setSortConfig] = useState({ column: null, direction: 'asc' });
@@ -842,11 +855,23 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeD
   if (hideUnknownRuns) {
     filteredData = filteredData.filter(drop => drop.killCount != null);
   }
+  if (showOnlyUniques) {
+    filteredData = filteredData.filter(drop => drop.isFirstDrop);
+  }
 
   return (
     <div className="space-y-6">
       {/* Filter Controls */}
-      <div className="flex justify-end gap-6">
+      <div className="flex justify-end gap-6 flex-wrap">
+        <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showOnlyUniques}
+            onChange={(e) => setShowOnlyUniques(e.target.checked)}
+            className="w-4 h-4 accent-amber-500"
+          />
+          Show Only Uniques
+        </label>
         <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
           <input
             type="checkbox"
@@ -903,7 +928,10 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeD
             {filteredData.map((drop, idx) => (
               <tr key={drop.id} className="border-t-2 border-amber-900 hover:bg-stone-700">
                 <td className="px-4 py-3 text-amber-200 font-semibold">{idx + 1}</td>
-                <td className="px-4 py-3 text-amber-100 font-semibold">{drop.item}</td>
+                <td className="px-4 py-3 text-amber-100 font-semibold">
+                  {drop.item}
+                  {drop.isFirstDrop && <span className="ml-2 text-xs bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold">NEW</span>}
+                </td>
                 <td className="px-4 py-3 text-amber-100">
                   {editingDrop === drop.id ? (
                     <div className="flex gap-2 items-center">
