@@ -76,6 +76,7 @@ const BarrowsTracker = () => {
     killCount,
     drops,
     dropHistory,
+    runHistory,
     loading: dataLoading,
     error: dataError,
     hasLocalData,
@@ -88,6 +89,8 @@ const BarrowsTracker = () => {
     mergeImportedData,
     replaceWithImportedData,
     migrateLocalDataToSupabase,
+    estimateRunsFromDrops,
+    bulkAddRuns,
   } = useBarrowsData();
 
   // UI state
@@ -99,6 +102,8 @@ const BarrowsTracker = () => {
   const [editingDrop, setEditingDrop] = useState(null);
   const [kcInput, setKcInput] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [bulkRunCount, setBulkRunCount] = useState('');
+  const [bulkRunDate, setBulkRunDate] = useState('');
   const [expandedBrothers, setExpandedBrothers] = useState({
     'Ahrim': true,
     'Akrisae': true,
@@ -210,42 +215,42 @@ const BarrowsTracker = () => {
     return { uniquesObtained, totalDrops, dropsWithDryStreak, currentDryStreak };
   };
 
-  const calculateDailySummary = (dropsWithDryStreak) => {
-    // Group drops by date (local timezone)
-    const byDate = {};
+  const calculateDailySummary = (dropsWithDryStreak, runHistoryData) => {
+    // Group runs by date (local timezone)
+    const runsByDate = {};
+    runHistoryData.forEach(run => {
+      if (!run.timestamp) return;
+      const date = new Date(run.timestamp).toLocaleDateString('en-CA');
+      runsByDate[date] = (runsByDate[date] || 0) + 1;
+    });
 
+    // Group drops by date (local timezone)
+    const dropsByDate = {};
     dropsWithDryStreak.forEach(drop => {
       if (!drop.timestamp) return;
-      // Convert to local date string (YYYY-MM-DD format)
       const date = new Date(drop.timestamp).toLocaleDateString('en-CA');
-      if (!byDate[date]) {
-        byDate[date] = { drops: [], minKC: Infinity, maxKC: -Infinity };
+      if (!dropsByDate[date]) {
+        dropsByDate[date] = { drops: [], uniques: 0 };
       }
-      byDate[date].drops.push(drop);
-      if (drop.killCount != null) {
-        byDate[date].minKC = Math.min(byDate[date].minKC, drop.killCount);
-        byDate[date].maxKC = Math.max(byDate[date].maxKC, drop.killCount);
+      dropsByDate[date].drops.push(drop);
+      if (drop.isFirstDrop) {
+        dropsByDate[date].uniques++;
       }
     });
 
-    // Sort dates and calculate runs
-    const sortedDates = Object.keys(byDate).sort();
-    let prevMaxKC = 0;
+    // Combine all dates from both runs and drops
+    const allDates = new Set([...Object.keys(runsByDate), ...Object.keys(dropsByDate)]);
+    const sortedDates = Array.from(allDates).sort();
 
     return sortedDates.map(date => {
-      const dayData = byDate[date];
-      const uniques = dayData.drops.filter(d => d.isFirstDrop).length;
-      const hasKC = dayData.maxKC !== -Infinity;
-
-      // Estimate runs: difference from previous day's max KC
-      let runs = hasKC ? dayData.maxKC - prevMaxKC : null;
-      if (hasKC) prevMaxKC = dayData.maxKC;
+      const dayDrops = dropsByDate[date] || { drops: [], uniques: 0 };
+      const dayRuns = runsByDate[date] || 0;
 
       return {
         date,
-        drops: dayData.drops.length,
-        runs,
-        uniques
+        drops: dayDrops.drops.length,
+        runs: dayRuns > 0 ? dayRuns : null, // Show null if no tracked runs
+        uniques: dayDrops.uniques
       };
     }).reverse(); // Newest first
   };
@@ -474,6 +479,56 @@ const BarrowsTracker = () => {
                       <Settings className="w-4 h-4" /> Setup
                     </button>
                   </div>
+                  <div className="border-t border-amber-800 pt-2 mt-2">
+                    <div className="text-amber-300 text-sm font-semibold mb-2">Run History Backfill</div>
+                    <div className="flex gap-2 flex-wrap items-end">
+                      <button
+                        onClick={async () => {
+                          const result = await estimateRunsFromDrops();
+                          if (result.added > 0) {
+                            alert(`Added ${result.added} estimated runs based on drop history.`);
+                          } else {
+                            alert('No runs to estimate. Make sure drops have timestamps and KC values.');
+                          }
+                        }}
+                        className="bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg font-semibold text-sm"
+                      >
+                        Estimate from Drops
+                      </button>
+                      <div className="flex gap-1 items-center">
+                        <input
+                          type="number"
+                          value={bulkRunCount}
+                          onChange={(e) => setBulkRunCount(e.target.value)}
+                          placeholder="# Runs"
+                          className="bg-stone-800 text-amber-100 px-2 py-2 rounded border-2 border-amber-900 w-24 text-sm"
+                        />
+                        <input
+                          type="date"
+                          value={bulkRunDate}
+                          onChange={(e) => setBulkRunDate(e.target.value)}
+                          className="bg-stone-800 text-amber-100 px-2 py-2 rounded border-2 border-amber-900 text-sm"
+                        />
+                        <button
+                          onClick={async () => {
+                            if (!bulkRunCount || !bulkRunDate) {
+                              alert('Please enter both run count and date.');
+                              return;
+                            }
+                            const result = await bulkAddRuns(parseInt(bulkRunCount), bulkRunDate);
+                            if (result.added > 0) {
+                              alert(`Added ${result.added} runs for ${bulkRunDate}.`);
+                              setBulkRunCount('');
+                              setBulkRunDate('');
+                            }
+                          }}
+                          className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-3 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
+                        >
+                          Add Runs
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -509,7 +564,7 @@ const BarrowsTracker = () => {
             ) : (
               <StatisticsTab
                 stats={stats}
-                dailySummary={calculateDailySummary(stats.dropsWithDryStreak)}
+                dailySummary={calculateDailySummary(stats.dropsWithDryStreak, runHistory)}
                 editingDrop={editingDrop}
                 setEditingDrop={setEditingDrop}
                 updateDrop={handleUpdateDrop}

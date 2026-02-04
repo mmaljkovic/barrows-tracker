@@ -139,6 +139,84 @@ export const barrowsApi = {
     return data;
   },
 
+  // Get run history for user
+  async getRunHistory(userId) {
+    const { data, error } = await supabase
+      .from('run_history')
+      .select('*')
+      .eq('user_id', userId)
+      .order('timestamp', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Add a single run
+  async addRun(userId, trackerId, timestamp) {
+    const { data, error } = await supabase
+      .from('run_history')
+      .insert({
+        user_id: userId,
+        tracker_id: trackerId,
+        timestamp: timestamp,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Add multiple runs at once (for bulk import)
+  async bulkAddRuns(userId, trackerId, runs) {
+    const runRecords = runs.map(run => ({
+      user_id: userId,
+      tracker_id: trackerId,
+      timestamp: run.timestamp,
+    }));
+
+    const { data, error } = await supabase
+      .from('run_history')
+      .insert(runRecords)
+      .select();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Remove a run by ID
+  async removeRun(runId) {
+    const { error } = await supabase
+      .from('run_history')
+      .delete()
+      .eq('id', runId);
+
+    if (error) throw error;
+  },
+
+  // Remove the most recent run for a user
+  async removeLatestRun(userId) {
+    // Get the most recent run
+    const { data: runs, error: fetchError } = await supabase
+      .from('run_history')
+      .select('id')
+      .eq('user_id', userId)
+      .order('timestamp', { ascending: false })
+      .limit(1);
+
+    if (fetchError) throw fetchError;
+    if (!runs || runs.length === 0) return null;
+
+    // Delete it
+    const { error: deleteError } = await supabase
+      .from('run_history')
+      .delete()
+      .eq('id', runs[0].id);
+
+    if (deleteError) throw deleteError;
+    return runs[0].id;
+  },
+
   // Replace all data (delete existing and insert new)
   async replaceAllData(userId, trackerId, killCount, drops) {
     // Delete all existing drops for this user

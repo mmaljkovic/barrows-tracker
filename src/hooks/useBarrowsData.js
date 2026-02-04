@@ -7,6 +7,7 @@ const LS_KEYS = {
   KC: 'rs3-barrows-kc',
   DROPS: 'rs3-barrows-drops',
   HISTORY: 'rs3-barrows-history',
+  RUN_HISTORY: 'rs3-barrows-run-history',
 };
 
 export const useBarrowsData = () => {
@@ -15,6 +16,7 @@ export const useBarrowsData = () => {
   const [killCount, setKillCount] = useState(0);
   const [drops, setDrops] = useState({});
   const [dropHistory, setDropHistory] = useState([]);
+  const [runHistory, setRunHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [trackerId, setTrackerId] = useState(null);
@@ -42,24 +44,36 @@ export const useBarrowsData = () => {
     const savedKC = localStorage.getItem(LS_KEYS.KC);
     const savedDrops = localStorage.getItem(LS_KEYS.DROPS);
     const savedHistory = localStorage.getItem(LS_KEYS.HISTORY);
+    const savedRunHistory = localStorage.getItem(LS_KEYS.RUN_HISTORY);
 
     const kc = savedKC ? parseInt(savedKC) : 0;
     const dropsData = savedDrops ? JSON.parse(savedDrops) : {};
     const historyData = savedHistory ? JSON.parse(savedHistory) : [];
+    const runHistoryData = savedRunHistory ? JSON.parse(savedRunHistory) : [];
 
     setKillCount(kc);
     setDrops(dropsData);
     setDropHistory(historyData);
+    setRunHistory(runHistoryData);
     setHasLocalData(!!savedKC || historyData.length > 0);
     setLoading(false);
   }, []);
 
   // Save to localStorage
-  const saveToLocalStorage = useCallback((kc, dropsData, history) => {
+  const saveToLocalStorage = useCallback((kc, dropsData, history, runs = null) => {
     localStorage.setItem(LS_KEYS.KC, kc.toString());
     localStorage.setItem(LS_KEYS.DROPS, JSON.stringify(dropsData));
     localStorage.setItem(LS_KEYS.HISTORY, JSON.stringify(history));
+    if (runs !== null) {
+      localStorage.setItem(LS_KEYS.RUN_HISTORY, JSON.stringify(runs));
+    }
   }, []);
+
+  // Normalize run history entry from Supabase format to app format
+  const normalizeRunEntry = useCallback((entry) => ({
+    id: entry.id,
+    timestamp: entry.timestamp,
+  }), []);
 
   // Load from Supabase
   const loadFromSupabase = useCallback(async () => {
@@ -78,6 +92,16 @@ export const useBarrowsData = () => {
       setDropHistory(normalizedHistory);
       setDrops(computeDropsFromHistory(normalizedHistory));
 
+      // Load run history
+      try {
+        const runs = await barrowsApi.getRunHistory(user.id);
+        setRunHistory(runs.map(normalizeRunEntry));
+      } catch (runErr) {
+        // Run history table might not exist yet, that's ok
+        console.warn('Could not load run history:', runErr.message);
+        setRunHistory([]);
+      }
+
       // Check if there's local data to potentially migrate
       const savedKC = localStorage.getItem(LS_KEYS.KC);
       const savedHistory = localStorage.getItem(LS_KEYS.HISTORY);
@@ -91,7 +115,7 @@ export const useBarrowsData = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, normalizeHistoryEntry, computeDropsFromHistory, loadFromLocalStorage]);
+  }, [user, normalizeHistoryEntry, normalizeRunEntry, computeDropsFromHistory, loadFromLocalStorage]);
 
   // Initial data load
   useEffect(() => {
@@ -105,20 +129,34 @@ export const useBarrowsData = () => {
   // Increment kill count
   const incrementKC = useCallback(async () => {
     const newKC = killCount + 1;
+    const timestamp = new Date().toISOString();
+    const newRun = { id: Date.now() + Math.random(), timestamp };
+
     setKillCount(newKC);
+    setRunHistory(prev => [...prev, newRun]);
 
     if (isConfigured && user && trackerId) {
       try {
         await barrowsApi.updateKillCount(trackerId, newKC);
+        // Also record the run with timestamp
+        try {
+          const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp);
+          // Update with real ID from server
+          setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp } : r));
+        } catch (runErr) {
+          console.warn('Could not save run to database:', runErr.message);
+          // Run history table might not exist, continue with local tracking
+        }
       } catch (err) {
         console.error('Error updating KC:', err);
         setKillCount(killCount); // Rollback
+        setRunHistory(prev => prev.filter(r => r.id !== newRun.id)); // Rollback run
         setError(err.message);
       }
     } else {
-      saveToLocalStorage(newKC, drops, dropHistory);
+      saveToLocalStorage(newKC, drops, dropHistory, [...runHistory, newRun]);
     }
-  }, [killCount, isConfigured, user, trackerId, drops, dropHistory, saveToLocalStorage]);
+  }, [killCount, isConfigured, user, trackerId, drops, dropHistory, runHistory, saveToLocalStorage]);
 
   // Set kill count manually
   const setKCManual = useCallback(async (newKC) => {
@@ -351,6 +389,91 @@ export const useBarrowsData = () => {
     }
   }, [isConfigured, user, trackerId, loadFromSupabase]);
 
+  // Estimate runs from drop history (one-time backfill)
+  const estimateRunsFromDrops = useCallback(async () => {
+    // Group drops by date and find KC progression
+    const dropsByDate = {};
+    dropHistory.forEach(drop => {
+      if (!drop.timestamp || drop.killCount == null) return;
+      const date = new Date(drop.timestamp).toLocaleDateString('en-CA');
+      if (!dropsByDate[date]) {
+        dropsByDate[date] = { minKC: Infinity, maxKC: -Infinity };
+      }
+      dropsByDate[date].minKC = Math.min(dropsByDate[date].minKC, drop.killCount);
+      dropsByDate[date].maxKC = Math.max(dropsByDate[date].maxKC, drop.killCount);
+    });
+
+    // Sort dates and calculate estimated runs per day
+    const sortedDates = Object.keys(dropsByDate).sort();
+    const estimatedRuns = [];
+    let prevMaxKC = 0;
+
+    sortedDates.forEach(date => {
+      const dayData = dropsByDate[date];
+      const runsThisDay = Math.max(0, dayData.maxKC - prevMaxKC);
+      prevMaxKC = dayData.maxKC;
+
+      // Create run entries spread throughout the day
+      for (let i = 0; i < runsThisDay; i++) {
+        estimatedRuns.push({
+          id: Date.now() + Math.random() + i,
+          timestamp: new Date(date + 'T12:00:00').toISOString(), // Noon on that day
+        });
+      }
+    });
+
+    if (estimatedRuns.length === 0) return { added: 0 };
+
+    // Add to state
+    setRunHistory(prev => [...prev, ...estimatedRuns]);
+
+    // Save to database/localStorage
+    if (isConfigured && user && trackerId) {
+      try {
+        await barrowsApi.bulkAddRuns(user.id, trackerId, estimatedRuns);
+        await loadFromSupabase(); // Reload to get real IDs
+      } catch (err) {
+        console.error('Error saving estimated runs:', err);
+        setError(err.message);
+      }
+    } else {
+      saveToLocalStorage(killCount, drops, dropHistory, [...runHistory, ...estimatedRuns]);
+    }
+
+    return { added: estimatedRuns.length };
+  }, [dropHistory, isConfigured, user, trackerId, killCount, drops, runHistory, loadFromSupabase, saveToLocalStorage]);
+
+  // Bulk add runs for a specific date
+  const bulkAddRuns = useCallback(async (count, date) => {
+    if (count <= 0) return { added: 0 };
+
+    const newRuns = [];
+    for (let i = 0; i < count; i++) {
+      newRuns.push({
+        id: Date.now() + Math.random() + i,
+        timestamp: new Date(date + 'T12:00:00').toISOString(),
+      });
+    }
+
+    // Add to state
+    setRunHistory(prev => [...prev, ...newRuns]);
+
+    // Save to database/localStorage
+    if (isConfigured && user && trackerId) {
+      try {
+        await barrowsApi.bulkAddRuns(user.id, trackerId, newRuns);
+        await loadFromSupabase(); // Reload to get real IDs
+      } catch (err) {
+        console.error('Error saving bulk runs:', err);
+        setError(err.message);
+      }
+    } else {
+      saveToLocalStorage(killCount, drops, dropHistory, [...runHistory, ...newRuns]);
+    }
+
+    return { added: count };
+  }, [isConfigured, user, trackerId, killCount, drops, dropHistory, runHistory, loadFromSupabase, saveToLocalStorage]);
+
   // Clear error
   const clearError = useCallback(() => setError(null), []);
 
@@ -358,6 +481,7 @@ export const useBarrowsData = () => {
     killCount,
     drops,
     dropHistory,
+    runHistory,
     loading,
     error,
     hasLocalData,
@@ -371,6 +495,8 @@ export const useBarrowsData = () => {
     mergeImportedData,
     replaceWithImportedData,
     migrateLocalDataToSupabase,
+    estimateRunsFromDrops,
+    bulkAddRuns,
     clearError,
     reload: isConfigured && user ? loadFromSupabase : loadFromLocalStorage,
   };
