@@ -825,6 +825,54 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
   const [editDate, setEditDate] = useState('');
   const [sortConfig, setSortConfig] = useState({ column: null, direction: 'asc' });
   const [showDailySummary, setShowDailySummary] = useState(false);
+  const [selectedDrops, setSelectedDrops] = useState(new Set());
+  const [bulkEditDate, setBulkEditDate] = useState('');
+
+  const toggleDropSelection = (dropId) => {
+    setSelectedDrops(prev => {
+      const next = new Set(prev);
+      if (next.has(dropId)) {
+        next.delete(dropId);
+      } else {
+        next.add(dropId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (filteredData) => {
+    const allIds = filteredData.map(d => d.id);
+    const allSelected = allIds.every(id => selectedDrops.has(id));
+    if (allSelected) {
+      setSelectedDrops(new Set());
+    } else {
+      setSelectedDrops(new Set(allIds));
+    }
+  };
+
+  const handleBulkDateUpdate = () => {
+    if (selectedDrops.size === 0 || !bulkEditDate) return;
+    const newTimestamp = new Date(bulkEditDate).toISOString();
+    selectedDrops.forEach(dropId => {
+      const drop = stats.dropsWithDryStreak.find(d => d.id === dropId);
+      if (drop) {
+        updateDrop(dropId, drop.killCount, newTimestamp);
+      }
+    });
+    setSelectedDrops(new Set());
+    setBulkEditDate('');
+  };
+
+  const clearBulkDates = () => {
+    if (selectedDrops.size === 0) return;
+    selectedDrops.forEach(dropId => {
+      const drop = stats.dropsWithDryStreak.find(d => d.id === dropId);
+      if (drop) {
+        updateDrop(dropId, drop.killCount, null);
+      }
+    });
+    setSelectedDrops(new Set());
+  };
 
   const handleSort = (column) => {
     if (sortConfig.column === column) {
@@ -985,10 +1033,54 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
         )}
       </div>
 
+      {/* Bulk Action Bar */}
+      {selectedDrops.size > 0 && (
+        <div className="bg-gradient-to-br from-amber-900 to-amber-950 rounded-lg p-4 border-2 border-amber-700 shadow-xl flex flex-wrap items-center gap-4">
+          <span className="text-amber-100 font-semibold">
+            {selectedDrops.size} drop{selectedDrops.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={bulkEditDate}
+              onChange={(e) => setBulkEditDate(e.target.value)}
+              className="bg-stone-800 text-amber-100 px-3 py-1.5 rounded border-2 border-amber-800"
+            />
+            <button
+              onClick={handleBulkDateUpdate}
+              disabled={!bulkEditDate}
+              className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 disabled:from-stone-600 disabled:to-stone-800 text-white px-3 py-1.5 rounded border-2 border-amber-950 font-semibold text-sm"
+            >
+              Set Date
+            </button>
+            <button
+              onClick={clearBulkDates}
+              className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-3 py-1.5 rounded border-2 border-stone-950 font-semibold text-sm"
+            >
+              Set Unknown
+            </button>
+          </div>
+          <button
+            onClick={() => setSelectedDrops(new Set())}
+            className="text-amber-300 hover:text-amber-200 text-sm font-semibold ml-auto"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg overflow-hidden overflow-x-auto border-2 border-amber-900 shadow-xl">
         <table className="w-full">
           <thead className="bg-gradient-to-b from-amber-800 to-amber-950">
             <tr>
+              <th className="px-2 py-3 text-center">
+                <input
+                  type="checkbox"
+                  checked={filteredData.length > 0 && filteredData.every(d => selectedDrops.has(d.id))}
+                  onChange={() => toggleSelectAll(filteredData)}
+                  className="w-4 h-4 accent-amber-500"
+                />
+              </th>
               <th className="px-4 py-3 text-left rs-text-gold font-bold">#</th>
               <th
                 className="px-4 py-3 text-left rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
@@ -1019,7 +1111,15 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
           </thead>
           <tbody>
             {filteredData.map((drop, idx) => (
-              <tr key={drop.id} className="border-t-2 border-amber-900 hover:bg-stone-700">
+              <tr key={drop.id} className={`border-t-2 border-amber-900 hover:bg-stone-700 ${selectedDrops.has(drop.id) ? 'bg-amber-900/30' : ''}`}>
+                <td className="px-2 py-3 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedDrops.has(drop.id)}
+                    onChange={() => toggleDropSelection(drop.id)}
+                    className="w-4 h-4 accent-amber-500"
+                  />
+                </td>
                 <td className="px-4 py-3 text-amber-200 font-semibold">{idx + 1}</td>
                 <td className="px-4 py-3 text-amber-100 font-semibold">
                   {drop.item}
