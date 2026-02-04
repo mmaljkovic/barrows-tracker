@@ -1166,7 +1166,7 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
                       </button>
                     </div>
                   ) : (
-                    <span className="font-semibold">{drop.timestamp ? new Date(drop.timestamp).toLocaleDateString(undefined, { timeZone: 'UTC' }) : '-'}</span>
+                    <span className="font-semibold">{drop.timestamp ? new Date(drop.timestamp).toLocaleDateString() : '-'}</span>
                   )}
                 </td>
                 <td className="px-4 py-3">
