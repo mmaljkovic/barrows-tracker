@@ -210,6 +210,45 @@ const BarrowsTracker = () => {
     return { uniquesObtained, totalDrops, dropsWithDryStreak, currentDryStreak };
   };
 
+  const calculateDailySummary = (dropsWithDryStreak) => {
+    // Group drops by date
+    const byDate = {};
+
+    dropsWithDryStreak.forEach(drop => {
+      if (!drop.timestamp) return;
+      const date = drop.timestamp.split('T')[0];
+      if (!byDate[date]) {
+        byDate[date] = { drops: [], minKC: Infinity, maxKC: -Infinity };
+      }
+      byDate[date].drops.push(drop);
+      if (drop.killCount != null) {
+        byDate[date].minKC = Math.min(byDate[date].minKC, drop.killCount);
+        byDate[date].maxKC = Math.max(byDate[date].maxKC, drop.killCount);
+      }
+    });
+
+    // Sort dates and calculate runs
+    const sortedDates = Object.keys(byDate).sort();
+    let prevMaxKC = 0;
+
+    return sortedDates.map(date => {
+      const dayData = byDate[date];
+      const uniques = dayData.drops.filter(d => d.isFirstDrop).length;
+      const hasKC = dayData.maxKC !== -Infinity;
+
+      // Estimate runs: difference from previous day's max KC
+      let runs = hasKC ? dayData.maxKC - prevMaxKC : null;
+      if (hasKC) prevMaxKC = dayData.maxKC;
+
+      return {
+        date,
+        drops: dayData.drops.length,
+        runs,
+        uniques
+      };
+    }).reverse(); // Newest first
+  };
+
   const getBrotherCompletion = (brother) => {
     const items = BARROWS_DATA[brother];
     const obtained = items.filter(item => drops[item.name]).length;
@@ -469,6 +508,7 @@ const BarrowsTracker = () => {
             ) : (
               <StatisticsTab
                 stats={stats}
+                dailySummary={calculateDailySummary(stats.dropsWithDryStreak)}
                 editingDrop={editingDrop}
                 setEditingDrop={setEditingDrop}
                 updateDrop={handleUpdateDrop}
@@ -779,10 +819,11 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
   );
 };
 
-const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil, hideUnknownRuns, setHideUnknownRuns, showOnlyUniques, setShowOnlyUniques }) => {
+const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil, hideUnknownRuns, setHideUnknownRuns, showOnlyUniques, setShowOnlyUniques }) => {
   const [editKC, setEditKC] = useState('');
   const [editDate, setEditDate] = useState('');
   const [sortConfig, setSortConfig] = useState({ column: null, direction: 'asc' });
+  const [showDailySummary, setShowDailySummary] = useState(false);
 
   const handleSort = (column) => {
     if (sortConfig.column === column) {
@@ -890,6 +931,57 @@ const StatisticsTab = ({ stats, editingDrop, setEditingDrop, updateDrop, removeD
           />
           Hide Corruption Sigil
         </label>
+      </div>
+
+      {/* Daily Summary Section */}
+      <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg border-2 border-amber-900 shadow-xl">
+        <button
+          onClick={() => setShowDailySummary(!showDailySummary)}
+          className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-stone-700 rounded-lg transition-colors"
+        >
+          <span className="text-lg font-bold rs-text-gold">Daily Summary</span>
+          <span className="text-amber-300">{showDailySummary ? '▼' : '▶'}</span>
+        </button>
+
+        {showDailySummary && (
+          <div className="px-4 pb-4">
+            {dailySummary.length === 0 ? (
+              <div className="text-amber-300 text-center py-4 font-semibold">
+                No drops with timestamps to summarize.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gradient-to-b from-amber-800 to-amber-950">
+                    <tr>
+                      <th className="px-4 py-2 text-left rs-text-gold font-bold">Date</th>
+                      <th className="px-4 py-2 text-center rs-text-gold font-bold">Drops</th>
+                      <th className="px-4 py-2 text-center rs-text-gold font-bold">Runs</th>
+                      <th className="px-4 py-2 text-center rs-text-gold font-bold">Uniques</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailySummary.map((day) => (
+                      <tr key={day.date} className="border-t border-amber-900 hover:bg-stone-700">
+                        <td className="px-4 py-2 text-amber-100 font-semibold">
+                          {new Date(day.date + 'T00:00:00').toLocaleDateString(undefined, {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </td>
+                        <td className="px-4 py-2 text-center text-emerald-400 font-bold">{day.drops}</td>
+                        <td className="px-4 py-2 text-center text-amber-200 font-semibold">{day.runs ?? '-'}</td>
+                        <td className="px-4 py-2 text-center text-yellow-400 font-bold">{day.uniques > 0 ? day.uniques : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg overflow-hidden overflow-x-auto border-2 border-amber-900 shadow-xl">
