@@ -211,12 +211,13 @@ const BarrowsTracker = () => {
   };
 
   const calculateDailySummary = (dropsWithDryStreak) => {
-    // Group drops by date
+    // Group drops by date (local timezone)
     const byDate = {};
 
     dropsWithDryStreak.forEach(drop => {
       if (!drop.timestamp) return;
-      const date = drop.timestamp.split('T')[0];
+      // Convert to local date string (YYYY-MM-DD format)
+      const date = new Date(drop.timestamp).toLocaleDateString('en-CA');
       if (!byDate[date]) {
         byDate[date] = { drops: [], minKC: Infinity, maxKC: -Infinity };
       }
