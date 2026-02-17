@@ -5,6 +5,7 @@ import { barrowsApi } from '../lib/supabaseApi';
 // localStorage keys
 const LS_KEYS = {
   KC: 'rs3-barrows-kc',
+  LINZA_KC: 'rs3-barrows-linza-kc',
   DROPS: 'rs3-barrows-drops',
   HISTORY: 'rs3-barrows-history',
   RUN_HISTORY: 'rs3-barrows-run-history',
@@ -14,6 +15,7 @@ export const useBarrowsData = () => {
   const { user, isConfigured } = useAuth();
 
   const [killCount, setKillCount] = useState(0);
+  const [linzaKillCount, setLinzaKillCount] = useState(0);
   const [drops, setDrops] = useState({});
   const [dropHistory, setDropHistory] = useState([]);
   const [runHistory, setRunHistory] = useState([]);
@@ -37,21 +39,25 @@ export const useBarrowsData = () => {
     item: entry.item_name,
     killCount: entry.kill_count,
     timestamp: entry.timestamp,
+    isLinza: entry.is_linza || false,
   }), []);
 
   // Load from localStorage
   const loadFromLocalStorage = useCallback(() => {
     const savedKC = localStorage.getItem(LS_KEYS.KC);
+    const savedLinzaKC = localStorage.getItem(LS_KEYS.LINZA_KC);
     const savedDrops = localStorage.getItem(LS_KEYS.DROPS);
     const savedHistory = localStorage.getItem(LS_KEYS.HISTORY);
     const savedRunHistory = localStorage.getItem(LS_KEYS.RUN_HISTORY);
 
     const kc = savedKC ? parseInt(savedKC) : 0;
+    const linzaKc = savedLinzaKC ? parseInt(savedLinzaKC) : 0;
     const dropsData = savedDrops ? JSON.parse(savedDrops) : {};
     const historyData = savedHistory ? JSON.parse(savedHistory) : [];
     const runHistoryData = savedRunHistory ? JSON.parse(savedRunHistory) : [];
 
     setKillCount(kc);
+    setLinzaKillCount(linzaKc);
     setDrops(dropsData);
     setDropHistory(historyData);
     setRunHistory(runHistoryData);
@@ -60,12 +66,15 @@ export const useBarrowsData = () => {
   }, []);
 
   // Save to localStorage
-  const saveToLocalStorage = useCallback((kc, dropsData, history, runs = null) => {
+  const saveToLocalStorage = useCallback((kc, dropsData, history, runs = null, linzaKc = null) => {
     localStorage.setItem(LS_KEYS.KC, kc.toString());
     localStorage.setItem(LS_KEYS.DROPS, JSON.stringify(dropsData));
     localStorage.setItem(LS_KEYS.HISTORY, JSON.stringify(history));
     if (runs !== null) {
       localStorage.setItem(LS_KEYS.RUN_HISTORY, JSON.stringify(runs));
+    }
+    if (linzaKc !== null) {
+      localStorage.setItem(LS_KEYS.LINZA_KC, linzaKc.toString());
     }
   }, []);
 
@@ -73,6 +82,7 @@ export const useBarrowsData = () => {
   const normalizeRunEntry = useCallback((entry) => ({
     id: entry.id,
     timestamp: entry.timestamp,
+    isLinza: entry.is_linza || false,
   }), []);
 
   // Load from Supabase
@@ -87,6 +97,7 @@ export const useBarrowsData = () => {
 
       setTrackerId(tracker.id);
       setKillCount(tracker.kill_count || 0);
+      setLinzaKillCount(tracker.linza_kill_count || 0);
 
       const normalizedHistory = history.map(normalizeHistoryEntry);
       setDropHistory(normalizedHistory);
@@ -158,6 +169,35 @@ export const useBarrowsData = () => {
     }
   }, [killCount, isConfigured, user, trackerId, drops, dropHistory, runHistory, saveToLocalStorage]);
 
+  // Increment Linza kill count
+  const incrementLinzaKC = useCallback(async () => {
+    const newKC = linzaKillCount + 1;
+    const timestamp = new Date().toISOString();
+    const newRun = { id: Date.now() + Math.random(), timestamp, isLinza: true };
+
+    setLinzaKillCount(newKC);
+    setRunHistory(prev => [...prev, newRun]);
+
+    if (isConfigured && user && trackerId) {
+      try {
+        await barrowsApi.updateLinzaKillCount(trackerId, newKC);
+        try {
+          const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp, true);
+          setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, isLinza: true } : r));
+        } catch (runErr) {
+          console.warn('Could not save Linza run to database:', runErr.message);
+        }
+      } catch (err) {
+        console.error('Error updating Linza KC:', err);
+        setLinzaKillCount(linzaKillCount); // Rollback
+        setRunHistory(prev => prev.filter(r => r.id !== newRun.id));
+        setError(err.message);
+      }
+    } else {
+      saveToLocalStorage(killCount, drops, dropHistory, [...runHistory, newRun], newKC);
+    }
+  }, [linzaKillCount, killCount, isConfigured, user, trackerId, drops, dropHistory, runHistory, saveToLocalStorage]);
+
   // Set kill count manually
   const setKCManual = useCallback(async (newKC) => {
     const parsedKC = parseInt(newKC) || 0;
@@ -177,7 +217,7 @@ export const useBarrowsData = () => {
   }, [killCount, isConfigured, user, trackerId, drops, dropHistory, saveToLocalStorage]);
 
   // Add drops
-  const addDrops = useCallback(async (items, kc) => {
+  const addDrops = useCallback(async (items, kc, isLinza = false) => {
     const timestamp = new Date().toISOString();
 
     // Optimistic update
@@ -191,6 +231,7 @@ export const useBarrowsData = () => {
         item: itemName,
         killCount: kc,
         timestamp,
+        isLinza,
       });
     });
 
@@ -199,7 +240,7 @@ export const useBarrowsData = () => {
 
     if (isConfigured && user && trackerId) {
       try {
-        const addedDrops = await barrowsApi.addDrops(user.id, trackerId, items, kc, timestamp);
+        const addedDrops = await barrowsApi.addDrops(user.id, trackerId, items, kc, timestamp, isLinza);
         // Update history with real IDs from server
         const updatedHistory = dropHistory.concat(
           addedDrops.map(normalizeHistoryEntry)
@@ -479,6 +520,7 @@ export const useBarrowsData = () => {
 
   return {
     killCount,
+    linzaKillCount,
     drops,
     dropHistory,
     runHistory,
@@ -488,6 +530,7 @@ export const useBarrowsData = () => {
     isAuthenticated: !!user,
     isConfigured,
     incrementKC,
+    incrementLinzaKC,
     setKCManual,
     addDrops,
     removeDrop,

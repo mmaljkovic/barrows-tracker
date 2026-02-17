@@ -39,11 +39,28 @@ export const barrowsApi = {
     return { tracker: finalTracker, history: history || [] };
   },
 
-  // Update kill count
-  async updateKillCount(trackerId, killCount) {
+  // Update kill count (regular and/or Linza)
+  async updateKillCount(trackerId, killCount, linzaKillCount = null) {
+    const updateData = { kill_count: killCount, updated_at: new Date().toISOString() };
+    if (linzaKillCount !== null) {
+      updateData.linza_kill_count = linzaKillCount;
+    }
     const { data, error } = await supabase
       .from('barrows_tracker')
-      .update({ kill_count: killCount, updated_at: new Date().toISOString() })
+      .update(updateData)
+      .eq('id', trackerId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Update Linza kill count only
+  async updateLinzaKillCount(trackerId, linzaKillCount) {
+    const { data, error } = await supabase
+      .from('barrows_tracker')
+      .update({ linza_kill_count: linzaKillCount, updated_at: new Date().toISOString() })
       .eq('id', trackerId)
       .select()
       .single();
@@ -71,13 +88,14 @@ export const barrowsApi = {
   },
 
   // Add multiple drops at once
-  async addDrops(userId, trackerId, items, killCount, timestamp = null) {
+  async addDrops(userId, trackerId, items, killCount, timestamp = null, isLinza = false) {
     const drops = items.map(itemName => ({
       user_id: userId,
       tracker_id: trackerId,
       item_name: itemName,
       kill_count: killCount,
       timestamp: timestamp,
+      is_linza: isLinza,
     }));
 
     const { data, error } = await supabase
@@ -152,13 +170,14 @@ export const barrowsApi = {
   },
 
   // Add a single run
-  async addRun(userId, trackerId, timestamp) {
+  async addRun(userId, trackerId, timestamp, isLinza = false) {
     const { data, error } = await supabase
       .from('run_history')
       .insert({
         user_id: userId,
         tracker_id: trackerId,
         timestamp: timestamp,
+        is_linza: isLinza,
       })
       .select()
       .single();
@@ -173,6 +192,7 @@ export const barrowsApi = {
       user_id: userId,
       tracker_id: trackerId,
       timestamp: run.timestamp,
+      is_linza: run.isLinza || false,
     }));
 
     const { data, error } = await supabase

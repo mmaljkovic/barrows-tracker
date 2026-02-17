@@ -74,6 +74,7 @@ const BarrowsTracker = () => {
   // Data from Supabase/localStorage hook
   const {
     killCount,
+    linzaKillCount,
     drops,
     dropHistory,
     runHistory,
@@ -82,6 +83,7 @@ const BarrowsTracker = () => {
     hasLocalData,
     isAuthenticated,
     incrementKC,
+    incrementLinzaKC,
     setKCManual: setKCManualHook,
     addDrops,
     removeDrop,
@@ -412,10 +414,18 @@ const BarrowsTracker = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-4">
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold">Run Count</div>
+              <div className="text-amber-200 text-sm font-semibold">Total Runs</div>
+              <div className="text-2xl font-bold rs-text-gold">{killCount + linzaKillCount}</div>
+            </div>
+            <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
+              <div className="text-amber-200 text-sm font-semibold">Full Runs</div>
               <div className="text-2xl font-bold rs-text-gold">{killCount}</div>
+            </div>
+            <div className="bg-gradient-to-br from-violet-950 to-stone-900 rounded p-3 text-center border-2 border-violet-800 shadow-inner">
+              <div className="text-violet-200 text-sm font-semibold">Linza Runs</div>
+              <div className="text-2xl font-bold text-violet-400">{linzaKillCount}</div>
             </div>
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
               <div className="text-amber-200 text-sm font-semibold">Dry Streak</div>
@@ -440,6 +450,9 @@ const BarrowsTracker = () => {
             <div className="flex gap-2 flex-wrap">
               <button onClick={incrementKC} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-900 shadow-lg flex items-center justify-center gap-2 min-w-32">
                 <Plus className="w-4 h-4" /> Add Run
+              </button>
+              <button onClick={incrementLinzaKC} className="bg-gradient-to-b from-violet-600 to-violet-800 hover:from-violet-500 hover:to-violet-700 text-white px-4 py-2 rounded border-2 border-violet-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
+                <Plus className="w-4 h-4" /> Add Linza Run
               </button>
               <button onClick={() => setShowAddDrop(true)} className="bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
                 <Plus className="w-4 h-4" /> Add Drop
@@ -582,8 +595,9 @@ const BarrowsTracker = () => {
       </div>
 
       {showAddDrop && (
-        <AddDropModal 
+        <AddDropModal
           killCount={killCount}
+          linzaKillCount={linzaKillCount}
           onAdd={addDrops}
           onClose={() => setShowAddDrop(false)}
         />
@@ -1179,6 +1193,7 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
                 <td className="px-4 py-3 text-amber-100 font-semibold">
                   {drop.item}
                   {drop.isFirstDrop && <span className="ml-2 text-xs bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold">NEW</span>}
+                  {drop.isLinza && <span className="ml-2 text-xs bg-violet-600 text-white px-1.5 py-0.5 rounded font-bold">LINZA</span>}
                 </td>
                 <td className="px-4 py-3 text-amber-100">
                   {editingDrop === drop.id ? (
@@ -1270,9 +1285,10 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
   );
 };
 
-const AddDropModal = ({ killCount, onAdd, onClose }) => {
+const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [dropKC, setDropKC] = useState(killCount.toString());
+  const [isLinza, setIsLinza] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const toggleItem = (itemName) => {
@@ -1285,7 +1301,7 @@ const AddDropModal = ({ killCount, onAdd, onClose }) => {
 
   const handleAdd = () => {
     if (selectedItems.length > 0) {
-      onAdd(selectedItems, parseInt(dropKC));
+      onAdd(selectedItems, parseInt(dropKC), isLinza);
       onClose();
     }
   };
@@ -1329,6 +1345,23 @@ const AddDropModal = ({ killCount, onAdd, onClose }) => {
               className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
             />
           </div>
+
+          <label className="flex items-center gap-2 text-violet-200 text-sm font-semibold cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isLinza}
+              onChange={(e) => {
+                setIsLinza(e.target.checked);
+                if (e.target.checked) {
+                  setDropKC(linzaKillCount.toString());
+                } else {
+                  setDropKC(killCount.toString());
+                }
+              }}
+              className="w-4 h-4 accent-violet-500"
+            />
+            Linza Run
+          </label>
 
           <div>
             <label className="block text-amber-200 mb-2 font-semibold">Search Items</label>
