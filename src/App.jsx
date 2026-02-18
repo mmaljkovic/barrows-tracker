@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Settings, Award, ArrowLeft, Download, Upload, LogIn } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Plus, Trash2, Settings, Award, ArrowLeft, Download, Upload, LogIn, X, BookOpen, ScrollText, CalendarDays } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { useBarrowsData } from './hooks/useBarrowsData';
 import AuthModal from './components/Auth/AuthModal';
@@ -84,6 +84,7 @@ const BarrowsTracker = () => {
     isAuthenticated,
     incrementKC,
     incrementLinzaKC,
+    undoRun,
     setKCManual: setKCManualHook,
     addDrops,
     removeDrop,
@@ -96,16 +97,24 @@ const BarrowsTracker = () => {
   } = useBarrowsData();
 
   // UI state
-  const [activeTab, setActiveTab] = useState('collection');
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem('rs3-barrows-active-tab');
+    return ['collection', 'droplog', 'daily', 'settings'].includes(saved) ? saved : 'collection';
+  });
+  useEffect(() => {
+    localStorage.setItem('rs3-barrows-active-tab', activeTab);
+  }, [activeTab]);
   const [showSetup, setShowSetup] = useState(false);
   const [showAddDrop, setShowAddDrop] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [editingDrop, setEditingDrop] = useState(null);
   const [kcInput, setKcInput] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [bulkRunCount, setBulkRunCount] = useState('');
   const [bulkRunDate, setBulkRunDate] = useState('');
+
+  // Toast system
+  const [toasts, setToasts] = useState([]);
+  const toastTimeouts = useRef({});
   const [expandedBrothers, setExpandedBrothers] = useState({
     'Ahrim': true,
     'Akrisae': true,
@@ -128,6 +137,41 @@ const BarrowsTracker = () => {
     }
   }, [isAuthenticated, hasLocalData]);
 
+  const addToast = useCallback((message, options = {}) => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, ...options }]);
+    toastTimeouts.current[id] = setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+      delete toastTimeouts.current[id];
+    }, 4000);
+  }, []);
+
+  const dismissToast = useCallback((id) => {
+    if (toastTimeouts.current[id]) {
+      clearTimeout(toastTimeouts.current[id]);
+      delete toastTimeouts.current[id];
+    }
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const handleUndo = useCallback((toast) => {
+    if (!toast.undoAction) return;
+    switch (toast.undoAction.type) {
+      case 'run':
+        undoRun(toast.undoAction.isLinza);
+        break;
+      case 'drop': {
+        const itemHistory = dropHistory.filter(d => d.item === toast.undoAction.itemName);
+        if (itemHistory.length > 0) {
+          const mostRecent = [...itemHistory].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+          removeDrop(mostRecent.id);
+        }
+        break;
+      }
+    }
+    dismissToast(toast.id);
+  }, [undoRun, dropHistory, removeDrop, dismissToast]);
+
   const handleSetKCManual = () => {
     const newKC = parseInt(kcInput) || 0;
     setKCManualHook(newKC);
@@ -136,6 +180,9 @@ const BarrowsTracker = () => {
 
   const quickAddDrop = (itemName) => {
     addDrops([itemName], killCount);
+    addToast(`Added ${itemName} at run ${killCount}`, {
+      undoAction: { type: 'drop', itemName },
+    });
   };
 
   const quickRemoveDrop = (itemName) => {
@@ -151,10 +198,6 @@ const BarrowsTracker = () => {
     removeDrop(mostRecent.id);
   };
 
-  const handleUpdateDrop = (historyId, newKC, newDate) => {
-    updateDrop(historyId, newKC, newDate);
-    setEditingDrop(null);
-  };
 
   const handleMigrate = async () => {
     await migrateLocalDataToSupabase();
@@ -385,6 +428,13 @@ const BarrowsTracker = () => {
   const totalUniques = Object.values(BARROWS_DATA).flat().length;
   const isComplete = stats.uniquesObtained === totalUniques;
 
+  const sidebarTabs = [
+    { id: 'collection', label: 'Collection Log', icon: BookOpen },
+    { id: 'droplog', label: 'Drop Log', icon: ScrollText },
+    { id: 'daily', label: 'Daily Summary', icon: CalendarDays },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-950 via-stone-900 to-neutral-950 p-4">
       <div className="max-w-7xl mx-auto">
@@ -405,7 +455,7 @@ const BarrowsTracker = () => {
                 ) : (
                   <button
                     onClick={() => setShowAuthModal(true)}
-                    className="flex items-center gap-2 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-900 shadow-lg font-semibold text-sm"
+                    className="flex items-center gap-2 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
                   >
                     <LogIn className="w-4 h-4" /> Sign In
                   </button>
@@ -414,18 +464,14 @@ const BarrowsTracker = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 mb-4">
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold">Total Runs</div>
+              <div className="text-amber-200 text-sm font-semibold">Runs</div>
               <div className="text-2xl font-bold rs-text-gold">{killCount + linzaKillCount}</div>
-            </div>
-            <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold">Full Runs</div>
-              <div className="text-2xl font-bold rs-text-gold">{killCount}</div>
-            </div>
-            <div className="bg-gradient-to-br from-violet-950 to-stone-900 rounded p-3 text-center border-2 border-violet-800 shadow-inner">
-              <div className="text-violet-200 text-sm font-semibold">Linza Runs</div>
-              <div className="text-2xl font-bold text-violet-400">{linzaKillCount}</div>
+              <div className="text-xs text-amber-300 mt-0.5">
+                <span>Full: {killCount}</span>
+                {linzaKillCount > 0 && <span className="text-violet-300"> / Linza: {linzaKillCount}</span>}
+              </div>
             </div>
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
               <div className="text-amber-200 text-sm font-semibold">Dry Streak</div>
@@ -448,60 +494,147 @@ const BarrowsTracker = () => {
           <div className="space-y-2">
             {/* Main Actions */}
             <div className="flex gap-2 flex-wrap">
-              <button onClick={incrementKC} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-900 shadow-lg flex items-center justify-center gap-2 min-w-32">
+              <button onClick={() => { incrementKC(); addToast(`Run ${killCount + 1} added`, { undoAction: { type: 'run', isLinza: false } }); }} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
                 <Plus className="w-4 h-4" /> Add Run
               </button>
-              <button onClick={incrementLinzaKC} className="bg-gradient-to-b from-violet-600 to-violet-800 hover:from-violet-500 hover:to-violet-700 text-white px-4 py-2 rounded border-2 border-violet-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
+              <button onClick={() => { incrementLinzaKC(); addToast(`Linza run ${linzaKillCount + 1} added`, { undoAction: { type: 'run', isLinza: true } }); }} className="bg-gradient-to-b from-violet-600 to-violet-800 hover:from-violet-500 hover:to-violet-700 text-white px-4 py-2 rounded border-2 border-violet-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
                 <Plus className="w-4 h-4" /> Add Linza Run
               </button>
-              <button onClick={() => setShowAddDrop(true)} className="bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
+              <button onClick={() => setShowAddDrop(true)} className="bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
                 <Plus className="w-4 h-4" /> Add Drop
               </button>
             </div>
 
-            {/* Advanced Options (Collapsible) */}
-            <div className="border-t border-amber-900 pt-2">
-              <button
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="text-amber-300 hover:text-amber-200 text-sm font-semibold flex items-center gap-1"
-              >
-                {showAdvanced ? '▼' : '▶'} Advanced Options
-              </button>
-              {showAdvanced && (
-                <div className="space-y-2 mt-2">
-                  <div className="flex gap-2 flex-wrap">
-                    <input
-                      type="number"
-                      value={kcInput}
-                      onChange={(e) => setKcInput(e.target.value)}
-                      placeholder="Run Count"
-                      className="bg-stone-800 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 w-40"
-                    />
-                    <button onClick={handleSetKCManual} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg flex items-center justify-center min-w-32">
-                      Set Run Count
-                    </button>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl border-4 border-amber-900 overflow-hidden rs-border">
+          <div className="flex flex-col md:flex-row">
+            {/* Desktop sidebar */}
+            <nav className="hidden md:flex flex-col w-14 bg-gradient-to-b from-stone-900 to-stone-950 border-r-2 border-amber-900 py-2 shrink-0">
+              {sidebarTabs.map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`group relative flex items-center justify-center w-full h-12 transition-colors ${
+                      isActive
+                        ? 'text-amber-200 bg-stone-700/50 border-l-[3px] border-amber-500'
+                        : 'text-amber-500/60 hover:text-amber-300 hover:bg-stone-800/50 border-l-[3px] border-transparent'
+                    }`}
+                    aria-label={tab.label}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="absolute left-full ml-2 px-2 py-1 bg-stone-900 border border-amber-800 text-amber-100 text-xs font-semibold rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
+                      {tab.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Mobile horizontal tabs */}
+            <nav className="flex md:hidden border-b-2 border-amber-900 bg-gradient-to-b from-stone-900 to-stone-950">
+              {sidebarTabs.map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+                      isActive
+                        ? 'text-amber-200 bg-stone-700/50 border-b-[3px] border-amber-500'
+                        : 'text-amber-500/60 hover:text-amber-300 border-b-[3px] border-transparent'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="text-[10px] font-semibold leading-tight">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Content area */}
+            <div className="flex-1 p-6 min-w-0">
+              {activeTab === 'collection' && (
+                <CollectionTab
+                  drops={drops}
+                  onQuickAdd={quickAddDrop}
+                  onQuickRemove={quickRemoveDrop}
+                  getBrotherCompletion={getBrotherCompletion}
+                  expandedBrothers={expandedBrothers}
+                  setExpandedBrothers={setExpandedBrothers}
+                />
+              )}
+              {activeTab === 'droplog' && (
+                <StatisticsTab
+                  stats={stats}
+                  updateDrop={updateDrop}
+                  removeDrop={removeDrop}
+                  hideCorruptionSigil={hideCorruptionSigil}
+                  setHideCorruptionSigil={setHideCorruptionSigil}
+                  hideUnknownRuns={hideUnknownRuns}
+                  setHideUnknownRuns={setHideUnknownRuns}
+                  showOnlyUniques={showOnlyUniques}
+                  setShowOnlyUniques={setShowOnlyUniques}
+                />
+              )}
+              {activeTab === 'daily' && (
+                <DailySummaryTab
+                  dailySummary={calculateDailySummary(stats.dropsWithDryStreak, runHistory)}
+                />
+              )}
+              {activeTab === 'settings' && (
+                <div className="space-y-6">
+                  <h2 className="text-xl font-bold rs-text-gold">Settings</h2>
+
+                  {/* Set Run Count */}
+                  <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg border-2 border-amber-900 shadow-xl p-4 space-y-3">
+                    <h3 className="text-amber-200 font-bold">Set Run Count</h3>
+                    <div className="flex gap-2 flex-wrap">
+                      <input
+                        type="number"
+                        value={kcInput}
+                        onChange={(e) => setKcInput(e.target.value)}
+                        placeholder="Run Count"
+                        className="bg-stone-800 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 w-40"
+                      />
+                      <button onClick={handleSetKCManual} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold min-w-32">
+                        Set Run Count
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <button onClick={() => setShowImport(true)} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
-                      <Upload className="w-4 h-4" /> Import
-                    </button>
-                    <button onClick={() => setShowExport(true)} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
-                      <Download className="w-4 h-4" /> Export
-                    </button>
-                    <button onClick={() => setShowSetup(true)} className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-4 py-2 rounded border-2 border-stone-950 shadow-lg flex items-center justify-center gap-2 min-w-32">
-                      <Settings className="w-4 h-4" /> Setup
-                    </button>
+
+                  {/* Import / Export / Setup */}
+                  <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg border-2 border-amber-900 shadow-xl p-4 space-y-3">
+                    <h3 className="text-amber-200 font-bold">Data Management</h3>
+                    <div className="flex gap-2 flex-wrap">
+                      <button onClick={() => setShowImport(true)} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
+                        <Upload className="w-4 h-4" /> Import
+                      </button>
+                      <button onClick={() => setShowExport(true)} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
+                        <Download className="w-4 h-4" /> Export
+                      </button>
+                      <button onClick={() => setShowSetup(true)} className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-4 py-2 rounded border-2 border-stone-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
+                        <Settings className="w-4 h-4" /> Setup
+                      </button>
+                    </div>
                   </div>
-                  <div className="border-t border-amber-800 pt-2 mt-2">
-                    <div className="text-amber-300 text-sm font-semibold mb-2">Run History Backfill</div>
+
+                  {/* Run History Backfill */}
+                  <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg border-2 border-amber-900 shadow-xl p-4 space-y-3">
+                    <h3 className="text-amber-200 font-bold">Run History Backfill</h3>
                     <div className="flex gap-2 flex-wrap items-end">
                       <button
                         onClick={async () => {
                           const result = await estimateRunsFromDrops();
                           if (result.added > 0) {
-                            alert(`Added ${result.added} estimated runs based on drop history.`);
+                            addToast(`Added ${result.added} estimated runs based on drop history.`);
                           } else {
-                            alert('No runs to estimate. Make sure drops have timestamps and KC values.');
+                            addToast('No runs to estimate. Make sure drops have timestamps and KC values.');
                           }
                         }}
                         className="bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg font-semibold text-sm"
@@ -525,17 +658,17 @@ const BarrowsTracker = () => {
                         <button
                           onClick={async () => {
                             if (!bulkRunCount || !bulkRunDate) {
-                              alert('Please enter both run count and date.');
+                              addToast('Please enter both run count and date.');
                               return;
                             }
                             const result = await bulkAddRuns(parseInt(bulkRunCount), bulkRunDate);
                             if (result.added > 0) {
-                              alert(`Added ${result.added} runs for ${bulkRunDate}.`);
+                              addToast(`Added ${result.added} runs for ${bulkRunDate}.`);
                               setBulkRunCount('');
                               setBulkRunDate('');
                             }
                           }}
-                          className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-3 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
+                          className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
                         >
                           Add Runs
                         </button>
@@ -547,58 +680,18 @@ const BarrowsTracker = () => {
             </div>
           </div>
         </div>
-
-        <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl border-4 border-amber-900 overflow-hidden rs-border">
-          <div className="flex border-b-4 border-amber-900">
-            <button
-              onClick={() => setActiveTab('collection')}
-              className={`flex-1 px-6 py-3 font-bold text-lg ${activeTab === 'collection' ? 'bg-gradient-to-b from-amber-700 to-amber-900 text-yellow-100' : 'bg-gradient-to-b from-stone-700 to-stone-800 text-amber-200 hover:from-stone-600 hover:to-stone-700'}`}
-            >
-              Collection Log
-            </button>
-            <button
-              onClick={() => setActiveTab('statistics')}
-              className={`flex-1 px-6 py-3 font-bold text-lg ${activeTab === 'statistics' ? 'bg-gradient-to-b from-amber-700 to-amber-900 text-yellow-100' : 'bg-gradient-to-b from-stone-700 to-stone-800 text-amber-200 hover:from-stone-600 hover:to-stone-700'}`}
-            >
-              Drop Log
-            </button>
-          </div>
-
-          <div className="p-6">
-            {activeTab === 'collection' ? (
-              <CollectionTab
-                drops={drops}
-                onQuickAdd={quickAddDrop}
-                onQuickRemove={quickRemoveDrop}
-                getBrotherCompletion={getBrotherCompletion}
-                expandedBrothers={expandedBrothers}
-                setExpandedBrothers={setExpandedBrothers}
-              />
-            ) : (
-              <StatisticsTab
-                stats={stats}
-                dailySummary={calculateDailySummary(stats.dropsWithDryStreak, runHistory)}
-                editingDrop={editingDrop}
-                setEditingDrop={setEditingDrop}
-                updateDrop={handleUpdateDrop}
-                removeDrop={removeDrop}
-                hideCorruptionSigil={hideCorruptionSigil}
-                setHideCorruptionSigil={setHideCorruptionSigil}
-                hideUnknownRuns={hideUnknownRuns}
-                setHideUnknownRuns={setHideUnknownRuns}
-                showOnlyUniques={showOnlyUniques}
-                setShowOnlyUniques={setShowOnlyUniques}
-              />
-            )}
-          </div>
-        </div>
       </div>
 
       {showAddDrop && (
         <AddDropModal
           killCount={killCount}
           linzaKillCount={linzaKillCount}
-          onAdd={addDrops}
+          dropHistory={dropHistory}
+          onAdd={(items, kc, isLinza) => {
+            addDrops(items, kc, isLinza);
+            const label = items.length === 1 ? items[0] : `${items.length} items`;
+            addToast(`Added ${label} at run ${kc}${isLinza ? ' (Linza)' : ''}`);
+          }}
           onClose={() => setShowAddDrop(false)}
         />
       )}
@@ -628,6 +721,8 @@ const BarrowsTracker = () => {
           onSkip={handleSkipMigration}
         />
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} onUndo={handleUndo} />
     </div>
   );
 };
@@ -889,11 +984,10 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
   );
 };
 
-const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil, hideUnknownRuns, setHideUnknownRuns, showOnlyUniques, setShowOnlyUniques }) => {
-  const [editKC, setEditKC] = useState('');
-  const [editDate, setEditDate] = useState('');
+const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil, hideUnknownRuns, setHideUnknownRuns, showOnlyUniques, setShowOnlyUniques }) => {
+  const [editingCell, setEditingCell] = useState(null); // { dropId, field: 'kc' | 'date' }
+  const [editValue, setEditValue] = useState('');
   const [sortConfig, setSortConfig] = useState({ column: null, direction: 'asc' });
-  const [showDailySummary, setShowDailySummary] = useState(false);
   const [selectedDrops, setSelectedDrops] = useState(new Set());
   const [bulkEditDate, setBulkEditDate] = useState('');
 
@@ -1018,6 +1112,27 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
     filteredData = filteredData.filter(drop => drop.isFirstDrop);
   }
 
+  const startEdit = (dropId, field, value) => {
+    setEditingCell({ dropId, field });
+    setEditValue(value);
+  };
+
+  const saveEdit = (drop) => {
+    if (!editingCell) return;
+    if (editingCell.field === 'kc') {
+      const newKC = editValue === '' ? null : parseInt(editValue);
+      updateDrop(drop.id, newKC, drop.timestamp || null);
+    } else if (editingCell.field === 'date') {
+      const newDate = editValue ? new Date(editValue).toISOString() : null;
+      updateDrop(drop.id, drop.killCount, newDate);
+    }
+    setEditingCell(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingCell(null);
+  };
+
   return (
     <div className="space-y-6">
       {/* Filter Controls */}
@@ -1051,57 +1166,6 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
         </label>
       </div>
 
-      {/* Daily Summary Section */}
-      <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg border-2 border-amber-900 shadow-xl">
-        <button
-          onClick={() => setShowDailySummary(!showDailySummary)}
-          className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-stone-700 rounded-lg transition-colors"
-        >
-          <span className="text-lg font-bold rs-text-gold">Daily Summary</span>
-          <span className="text-amber-300">{showDailySummary ? '▼' : '▶'}</span>
-        </button>
-
-        {showDailySummary && (
-          <div className="px-4 pb-4">
-            {dailySummary.length === 0 ? (
-              <div className="text-amber-300 text-center py-4 font-semibold">
-                No drops with timestamps to summarize.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gradient-to-b from-amber-800 to-amber-950">
-                    <tr>
-                      <th className="px-4 py-2 text-left rs-text-gold font-bold">Date</th>
-                      <th className="px-4 py-2 text-center rs-text-gold font-bold">Drops</th>
-                      <th className="px-4 py-2 text-center rs-text-gold font-bold">Runs</th>
-                      <th className="px-4 py-2 text-center rs-text-gold font-bold">Uniques</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dailySummary.map((day) => (
-                      <tr key={day.date} className="border-t border-amber-900 hover:bg-stone-700">
-                        <td className="px-4 py-2 text-amber-100 font-semibold">
-                          {new Date(day.date + 'T00:00:00').toLocaleDateString(undefined, {
-                            weekday: 'short',
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </td>
-                        <td className="px-4 py-2 text-center text-emerald-400 font-bold">{day.drops}</td>
-                        <td className="px-4 py-2 text-center text-amber-200 font-semibold">{day.runs ?? '-'}</td>
-                        <td className="px-4 py-2 text-center text-yellow-400 font-bold">{day.uniques > 0 ? day.uniques : '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Bulk Action Bar */}
       {selectedDrops.size > 0 && (
         <div className="bg-gradient-to-br from-amber-900 to-amber-950 rounded-lg p-4 border-2 border-amber-700 shadow-xl flex flex-wrap items-center gap-4">
@@ -1118,13 +1182,13 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
             <button
               onClick={handleBulkDateUpdate}
               disabled={!bulkEditDate}
-              className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 disabled:from-stone-600 disabled:to-stone-800 text-white px-3 py-1.5 rounded border-2 border-amber-950 font-semibold text-sm"
+              className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 disabled:from-stone-600 disabled:to-stone-800 text-white px-3 py-1.5 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
             >
               Set Date
             </button>
             <button
               onClick={clearBulkDates}
-              className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-3 py-1.5 rounded border-2 border-stone-950 font-semibold text-sm"
+              className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-3 py-1.5 rounded border-2 border-stone-950 shadow-lg font-semibold text-sm"
             >
               Set Unknown
             </button>
@@ -1161,7 +1225,7 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
                 className="px-4 py-3 text-left rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
                 onClick={() => handleSort('killCount')}
               >
-                Run Count<SortIcon column="killCount" />
+                Run #<SortIcon column="killCount" />
               </th>
               <th
                 className="px-4 py-3 text-left rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
@@ -1196,85 +1260,74 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
                   {drop.isLinza && <span className="ml-2 text-xs bg-violet-600 text-white px-1.5 py-0.5 rounded font-bold">LINZA</span>}
                 </td>
                 <td className="px-4 py-3 text-amber-100">
-                  {editingDrop === drop.id ? (
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="number"
-                        value={editKC}
-                        onChange={(e) => setEditKC(e.target.value)}
-                        className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-900 w-24"
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => setEditKC('')}
-                        className="text-amber-400 hover:text-amber-300 text-xs font-bold"
-                        title="Clear run count"
-                      >
-                        Clear
-                      </button>
-                    </div>
+                  {editingCell?.dropId === drop.id && editingCell?.field === 'kc' ? (
+                    <input
+                      type="number"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={() => saveEdit(drop)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEdit(drop);
+                        if (e.key === 'Escape') cancelEdit();
+                      }}
+                      className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-500 w-20"
+                      autoFocus
+                    />
                   ) : (
-                    <span className="font-semibold">{drop.killCount ?? '-'}</span>
+                    <span
+                      className="font-semibold cursor-pointer hover:text-amber-300 hover:underline"
+                      onClick={() => startEdit(drop.id, 'kc', drop.killCount != null ? drop.killCount.toString() : '')}
+                      title="Click to edit"
+                    >
+                      {drop.killCount ?? '-'}
+                    </span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-amber-200 font-semibold">{drop.dryStreak ?? '-'}</td>
                 <td className="px-4 py-3 text-amber-200">
-                  {editingDrop === drop.id ? (
-                    <div className="flex gap-2 items-center">
+                  {editingCell?.dropId === drop.id && editingCell?.field === 'date' ? (
+                    <div className="flex gap-1 items-center">
                       <input
                         type="date"
-                        value={editDate}
-                        onChange={(e) => setEditDate(e.target.value)}
-                        className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-900 w-32"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => saveEdit(drop)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveEdit(drop);
+                          if (e.key === 'Escape') cancelEdit();
+                        }}
+                        className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-500 w-36"
+                        autoFocus
                       />
                       <button
-                        onClick={() => setEditDate('')}
-                        className="text-amber-400 hover:text-amber-300 text-xs font-bold"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          updateDrop(drop.id, drop.killCount, null);
+                          setEditingCell(null);
+                        }}
+                        className="text-stone-400 hover:text-red-400 text-xs"
                         title="Clear date"
                       >
-                        Clear
+                        <X className="w-3 h-3" />
                       </button>
                     </div>
                   ) : (
-                    <span className="font-semibold">{drop.timestamp ? new Date(drop.timestamp).toLocaleDateString() : '-'}</span>
+                    <span
+                      className="font-semibold cursor-pointer hover:text-amber-300 hover:underline"
+                      onClick={() => startEdit(drop.id, 'date', drop.timestamp ? new Date(drop.timestamp).toISOString().split('T')[0] : '')}
+                      title="Click to edit"
+                    >
+                      {drop.timestamp ? new Date(drop.timestamp).toLocaleDateString() : '-'}
+                    </span>
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {editingDrop === drop.id ? (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => updateDrop(drop.id, editKC === '' ? null : parseInt(editKC), editDate ? new Date(editDate).toISOString() : null)}
-                        className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-2 py-1 rounded text-sm border-2 border-amber-950 font-bold"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setEditingDrop(null)}
-                        className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-2 py-1 rounded text-sm border-2 border-stone-950 font-bold"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setEditingDrop(drop.id);
-                          setEditKC(drop.killCount != null ? drop.killCount.toString() : '');
-                          setEditDate(drop.timestamp ? new Date(drop.timestamp).toISOString().split('T')[0] : '');
-                        }}
-                        className="text-blue-400 hover:text-blue-300"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => removeDrop(drop.id)}
-                        className="text-red-400 hover:text-red-300"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
+                  <button
+                    onClick={() => removeDrop(drop.id)}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -1285,11 +1338,79 @@ const StatisticsTab = ({ stats, dailySummary, editingDrop, setEditingDrop, updat
   );
 };
 
-const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
+const DailySummaryTab = ({ dailySummary }) => {
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold rs-text-gold">Daily Summary</h2>
+      {dailySummary.length === 0 ? (
+        <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg border-2 border-amber-900 shadow-xl p-6">
+          <div className="text-amber-300 text-center py-4 font-semibold">
+            No drops with timestamps to summarize.
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg overflow-hidden overflow-x-auto border-2 border-amber-900 shadow-xl">
+          <table className="w-full">
+            <thead className="bg-gradient-to-b from-amber-800 to-amber-950">
+              <tr>
+                <th className="px-4 py-2 text-left rs-text-gold font-bold">Date</th>
+                <th className="px-4 py-2 text-center rs-text-gold font-bold">Drops</th>
+                <th className="px-4 py-2 text-center rs-text-gold font-bold">Runs</th>
+                <th className="px-4 py-2 text-center rs-text-gold font-bold">Uniques</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dailySummary.map((day) => (
+                <tr key={day.date} className="border-t border-amber-900 hover:bg-stone-700">
+                  <td className="px-4 py-2 text-amber-100 font-semibold">
+                    {new Date(day.date + 'T00:00:00').toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </td>
+                  <td className="px-4 py-2 text-center text-emerald-400 font-bold">{day.drops}</td>
+                  <td className="px-4 py-2 text-center text-amber-200 font-semibold">{day.runs ?? '-'}</td>
+                  <td className="px-4 py-2 text-center text-yellow-400 font-bold">{day.uniques > 0 ? day.uniques : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AddDropModal = ({ killCount, linzaKillCount, dropHistory = [], onAdd, onClose }) => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [dropKC, setDropKC] = useState(killCount.toString());
   const [isLinza, setIsLinza] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Compute recent unique items from drop history
+  const recentItems = (() => {
+    const seen = new Set();
+    const recent = [];
+    for (let i = dropHistory.length - 1; i >= 0 && recent.length < 5; i--) {
+      const item = dropHistory[i].item;
+      if (!seen.has(item)) {
+        seen.add(item);
+        recent.push(item);
+      }
+    }
+    return recent;
+  })();
+
+  // Find item image from BARROWS_DATA
+  const getItemImg = (itemName) => {
+    for (const items of Object.values(BARROWS_DATA)) {
+      const found = items.find(i => i.name === itemName);
+      if (found) return found.img;
+    }
+    return null;
+  };
 
   const toggleItem = (itemName) => {
     setSelectedItems(prev =>
@@ -1337,7 +1458,7 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
         <h3 className="text-2xl font-bold rs-text-gold mb-4">Add Drop(s)</h3>
         <div className="space-y-4">
           <div>
-            <label className="block text-amber-200 mb-2 font-semibold">Run Count</label>
+            <label className="block text-amber-200 mb-2 font-semibold">Obtained at Run #</label>
             <input
               type="number"
               value={dropKC}
@@ -1362,6 +1483,31 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
             />
             Linza Run
           </label>
+
+          {recentItems.length > 0 && (
+            <div>
+              <label className="block text-amber-200 mb-2 font-semibold text-sm">Recent Drops</label>
+              <div className="flex flex-wrap gap-2">
+                {recentItems.map(itemName => {
+                  const img = getItemImg(itemName);
+                  return (
+                    <button
+                      key={itemName}
+                      onClick={() => toggleItem(itemName)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded transition-all text-left border-2 text-sm ${
+                        selectedItems.includes(itemName)
+                          ? 'bg-gradient-to-b from-amber-700 to-amber-900 border-amber-950'
+                          : 'bg-gradient-to-b from-stone-700 to-stone-800 hover:from-stone-600 hover:to-stone-700 border-stone-950'
+                      }`}
+                    >
+                      {img && <img src={img} alt={itemName} className="w-6 h-6 object-contain" />}
+                      <span className="text-amber-100 font-semibold">{itemName}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-amber-200 mb-2 font-semibold">Search Items</label>
@@ -1420,141 +1566,6 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
             <button
               onClick={handleAdd}
               disabled={selectedItems.length === 0}
-              className="flex-1 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 disabled:bg-gradient-to-b disabled:from-stone-700 disabled:to-stone-900 disabled:cursor-not-allowed text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold"
-            >
-              Add Drop(s)
-            </button>
-            <button
-              onClick={onClose}
-              className="flex-1 bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-4 py-2 rounded border-2 border-stone-950 shadow-lg font-bold"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const BulkAddModal = ({ onAdd, onClose }) => {
-  const [selectedItems, setSelectedItems] = useState([]);
-  const [dropKC, setDropKC] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const toggleItem = (itemName) => {
-    setSelectedItems(prev =>
-      prev.includes(itemName)
-        ? prev.filter(i => i !== itemName)
-        : [...prev, itemName]
-    );
-  };
-
-  const handleAdd = () => {
-    if (selectedItems.length > 0 && dropKC) {
-      onAdd(selectedItems, parseInt(dropKC));
-      onClose();
-    }
-  };
-
-  // Filter brothers and items based on search query
-  const getFilteredData = () => {
-    if (!searchQuery.trim()) {
-      return BARROWS_DATA;
-    }
-
-    const query = searchQuery.toLowerCase();
-    const filtered = {};
-
-    Object.entries(BARROWS_DATA).forEach(([brother, items]) => {
-      const matchingItems = items.filter(item =>
-        item.name.toLowerCase().includes(query) ||
-        brother.toLowerCase().includes(query)
-      );
-      if (matchingItems.length > 0) {
-        filtered[brother] = matchingItems;
-      }
-    });
-
-    return filtered;
-  };
-
-  const filteredData = getFilteredData();
-  const hasResults = Object.keys(filteredData).length > 0;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
-      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-4xl w-full border-4 border-amber-900 max-h-[90vh] overflow-y-auto rs-border">
-        <h3 className="text-2xl font-bold rs-text-gold mb-4">Bulk Add Drop(s)</h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-amber-200 mb-2 font-semibold">Run Count (required)</label>
-            <input
-              type="number"
-              value={dropKC}
-              onChange={(e) => setDropKC(e.target.value)}
-              className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
-              placeholder="Enter run count for these drops"
-            />
-          </div>
-
-          <div>
-            <label className="block text-amber-200 mb-2 font-semibold">Search Items</label>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by item name or brother..."
-              className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
-            />
-          </div>
-
-          <div>
-            <label className="block text-amber-200 mb-2 font-semibold">
-              Items (select one or more)
-              <span className="text-amber-300 text-sm ml-2">
-                Selected: {selectedItems.length} item(s)
-              </span>
-            </label>
-            <div className="bg-stone-900 rounded p-4 max-h-[50vh] overflow-y-auto border-2 border-amber-900">
-              {!hasResults ? (
-                <div className="text-amber-300 text-center py-8">
-                  No items found matching "{searchQuery}"
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {Object.entries(filteredData).map(([brother, items]) => (
-                    <div key={brother}>
-                      <h4 className="text-lg font-bold text-amber-300 mb-2 border-b border-amber-800 pb-1">
-                        {brother}
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {items.map(item => (
-                          <button
-                            key={item.name}
-                            onClick={() => toggleItem(item.name)}
-                            className={`flex items-center gap-3 p-2 rounded transition-all text-left border-2 ${
-                              selectedItems.includes(item.name)
-                                ? 'bg-gradient-to-b from-orange-700 to-orange-900 hover:from-orange-600 hover:to-orange-800 border-orange-950'
-                                : 'bg-gradient-to-b from-stone-800 to-stone-950 hover:from-stone-700 hover:to-stone-900 border-stone-950'
-                            }`}
-                          >
-                            <img src={item.img} alt={item.name} className="w-8 h-8 object-contain" />
-                            <span className="text-amber-100 text-sm font-semibold">{item.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleAdd}
-              disabled={selectedItems.length === 0 || !dropKC}
               className="flex-1 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 disabled:bg-gradient-to-b disabled:from-stone-700 disabled:to-stone-900 disabled:cursor-not-allowed text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold"
             >
               Add Drop(s)
@@ -2035,6 +2046,37 @@ const MigrationModal = ({ onMigrate, onSkip }) => {
           </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+const ToastContainer = ({ toasts, onDismiss, onUndo }) => {
+  if (toasts.length === 0) return null;
+
+  return (
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+      {toasts.map(toast => (
+        <div
+          key={toast.id}
+          className="bg-gradient-to-br from-stone-800 to-stone-900 border-2 border-amber-800 rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3 animate-fade-in"
+        >
+          <span className="text-amber-100 text-sm font-semibold flex-1">{toast.message}</span>
+          {toast.undoAction && (
+            <button
+              onClick={() => onUndo(toast)}
+              className="text-amber-400 hover:text-amber-300 text-sm font-bold underline whitespace-nowrap"
+            >
+              Undo
+            </button>
+          )}
+          <button
+            onClick={() => onDismiss(toast.id)}
+            className="text-stone-500 hover:text-stone-400"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
     </div>
   );
 };

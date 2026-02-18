@@ -198,6 +198,51 @@ export const useBarrowsData = () => {
     }
   }, [linzaKillCount, killCount, isConfigured, user, trackerId, drops, dropHistory, runHistory, saveToLocalStorage]);
 
+  // Undo the latest run (for toast undo)
+  const undoRun = useCallback(async (isLinza = false) => {
+    const currentKC = isLinza ? linzaKillCount : killCount;
+    if (currentKC <= 0) return;
+
+    const newKC = currentKC - 1;
+
+    if (isLinza) {
+      setLinzaKillCount(newKC);
+    } else {
+      setKillCount(newKC);
+    }
+
+    // Find and remove latest matching run from state
+    const latestIdx = [...runHistory].reverse().findIndex(r => (r.isLinza || false) === isLinza);
+    let updatedRuns = runHistory;
+    if (latestIdx !== -1) {
+      const actualIdx = runHistory.length - 1 - latestIdx;
+      updatedRuns = [...runHistory.slice(0, actualIdx), ...runHistory.slice(actualIdx + 1)];
+      setRunHistory(updatedRuns);
+    }
+
+    if (isConfigured && user && trackerId) {
+      try {
+        if (isLinza) {
+          await barrowsApi.updateLinzaKillCount(trackerId, newKC);
+        } else {
+          await barrowsApi.updateKillCount(trackerId, newKC);
+        }
+        await barrowsApi.removeLatestRun(user.id, isLinza);
+      } catch (err) {
+        console.error('Error undoing run:', err);
+        setError(err.message);
+      }
+    } else {
+      saveToLocalStorage(
+        isLinza ? killCount : newKC,
+        drops,
+        dropHistory,
+        updatedRuns,
+        isLinza ? newKC : null
+      );
+    }
+  }, [killCount, linzaKillCount, runHistory, isConfigured, user, trackerId, drops, dropHistory, saveToLocalStorage]);
+
   // Set kill count manually
   const setKCManual = useCallback(async (newKC) => {
     const parsedKC = parseInt(newKC) || 0;
@@ -531,6 +576,7 @@ export const useBarrowsData = () => {
     isConfigured,
     incrementKC,
     incrementLinzaKC,
+    undoRun,
     setKCManual,
     addDrops,
     removeDrop,

@@ -214,13 +214,14 @@ export const barrowsApi = {
     if (error) throw error;
   },
 
-  // Remove the most recent run for a user
-  async removeLatestRun(userId) {
-    // Get the most recent run
+  // Remove the most recent run for a user (optionally filtered by Linza)
+  async removeLatestRun(userId, isLinza = false) {
+    // Get the most recent matching run
     const { data: runs, error: fetchError } = await supabase
       .from('run_history')
       .select('id')
       .eq('user_id', userId)
+      .eq('is_linza', isLinza)
       .order('timestamp', { ascending: false })
       .limit(1);
 
