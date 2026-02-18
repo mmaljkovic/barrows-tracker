@@ -261,12 +261,17 @@ const BarrowsTracker = () => {
   };
 
   const calculateDailySummary = (dropsWithDryStreak, runHistoryData) => {
-    // Group runs by date (local timezone)
+    // Group runs by date (local timezone), split by type
     const runsByDate = {};
     runHistoryData.forEach(run => {
       if (!run.timestamp) return;
       const date = new Date(run.timestamp).toLocaleDateString('en-CA');
-      runsByDate[date] = (runsByDate[date] || 0) + 1;
+      if (!runsByDate[date]) runsByDate[date] = { full: 0, linza: 0 };
+      if (run.isLinza) {
+        runsByDate[date].linza++;
+      } else {
+        runsByDate[date].full++;
+      }
     });
 
     // Group drops by date (local timezone)
@@ -289,12 +294,15 @@ const BarrowsTracker = () => {
 
     return sortedDates.map(date => {
       const dayDrops = dropsByDate[date] || { drops: [], uniques: 0 };
-      const dayRuns = runsByDate[date] || 0;
+      const dayRuns = runsByDate[date] || { full: 0, linza: 0 };
+      const totalRuns = dayRuns.full + dayRuns.linza;
 
       return {
         date,
         drops: dayDrops.drops.length,
-        runs: dayRuns > 0 ? dayRuns : null, // Show null if no tracked runs
+        runs: totalRuns > 0 ? totalRuns : null,
+        fullRuns: dayRuns.full > 0 ? dayRuns.full : null,
+        linzaRuns: dayRuns.linza > 0 ? dayRuns.linza : null,
         uniques: dayDrops.uniques
       };
     }).reverse(); // Newest first
@@ -785,9 +793,9 @@ const SetupScreen = ({ onComplete, onSkip, hasExistingData }) => {
 };
 
 const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion, expandedBrothers, setExpandedBrothers }) => {
-  const [compactView, setCompactView] = useState(false);
-  const [hideCompleted, setHideCompleted] = useState(false);
-  const [showOnlyMissing, setShowOnlyMissing] = useState(false);
+  const [compactView, setCompactView] = useState(() => localStorage.getItem('rs3-barrows-compact-view') === 'true');
+  const [hideCompleted, setHideCompleted] = useState(() => localStorage.getItem('rs3-barrows-hide-completed') === 'true');
+  const [showOnlyMissing, setShowOnlyMissing] = useState(() => localStorage.getItem('rs3-barrows-show-only-missing') === 'true');
 
   const handleItemClick = (e, itemName) => {
     // Shift+click or right-click to decrement
@@ -855,7 +863,7 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
             <input
               type="checkbox"
               checked={compactView}
-              onChange={(e) => setCompactView(e.target.checked)}
+              onChange={(e) => { setCompactView(e.target.checked); localStorage.setItem('rs3-barrows-compact-view', e.target.checked.toString()); }}
               className="w-4 h-4 accent-amber-500"
             />
             Compact View
@@ -864,7 +872,7 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
             <input
               type="checkbox"
               checked={hideCompleted}
-              onChange={(e) => setHideCompleted(e.target.checked)}
+              onChange={(e) => { setHideCompleted(e.target.checked); localStorage.setItem('rs3-barrows-hide-completed', e.target.checked.toString()); }}
               className="w-4 h-4 accent-amber-500"
             />
             Hide Completed Sets
@@ -873,7 +881,7 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
             <input
               type="checkbox"
               checked={showOnlyMissing}
-              onChange={(e) => setShowOnlyMissing(e.target.checked)}
+              onChange={(e) => { setShowOnlyMissing(e.target.checked); localStorage.setItem('rs3-barrows-show-only-missing', e.target.checked.toString()); }}
               className="w-4 h-4 accent-amber-500"
             />
             Show Only Missing
@@ -1355,7 +1363,8 @@ const DailySummaryTab = ({ dailySummary }) => {
               <tr>
                 <th className="px-4 py-2 text-left rs-text-gold font-bold">Date</th>
                 <th className="px-4 py-2 text-center rs-text-gold font-bold">Drops</th>
-                <th className="px-4 py-2 text-center rs-text-gold font-bold">Runs</th>
+                <th className="px-4 py-2 text-center rs-text-gold font-bold">Full Runs</th>
+                <th className="px-4 py-2 text-center rs-text-gold font-bold">Linza Runs</th>
                 <th className="px-4 py-2 text-center rs-text-gold font-bold">Uniques</th>
               </tr>
             </thead>
@@ -1371,7 +1380,8 @@ const DailySummaryTab = ({ dailySummary }) => {
                     })}
                   </td>
                   <td className="px-4 py-2 text-center text-emerald-400 font-bold">{day.drops}</td>
-                  <td className="px-4 py-2 text-center text-amber-200 font-semibold">{day.runs ?? '-'}</td>
+                  <td className="px-4 py-2 text-center text-amber-200 font-semibold">{day.fullRuns ?? '-'}</td>
+                  <td className="px-4 py-2 text-center text-violet-400 font-semibold">{day.linzaRuns ?? '-'}</td>
                   <td className="px-4 py-2 text-center text-yellow-400 font-bold">{day.uniques > 0 ? day.uniques : '-'}</td>
                 </tr>
               ))}
