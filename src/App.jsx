@@ -126,9 +126,9 @@ const BarrowsTracker = () => {
     'Linza': true,
     'General': true
   });
-  const [hideCorruptionSigil, setHideCorruptionSigil] = useState(false);
-  const [hideUnknownRuns, setHideUnknownRuns] = useState(false);
-  const [showOnlyUniques, setShowOnlyUniques] = useState(false);
+  const [hideCorruptionSigil, setHideCorruptionSigil] = useState(() => localStorage.getItem('rs3-barrows-hide-corruption') === 'true');
+  const [hideUnknownRuns, setHideUnknownRuns] = useState(() => localStorage.getItem('rs3-barrows-hide-unknown-runs') === 'true');
+  const [showOnlyUniques, setShowOnlyUniques] = useState(() => localStorage.getItem('rs3-barrows-show-only-uniques') === 'true');
 
   // Show migration prompt when user logs in and has local data
   useEffect(() => {
@@ -1149,7 +1149,7 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
           <input
             type="checkbox"
             checked={showOnlyUniques}
-            onChange={(e) => setShowOnlyUniques(e.target.checked)}
+            onChange={(e) => { setShowOnlyUniques(e.target.checked); localStorage.setItem('rs3-barrows-show-only-uniques', e.target.checked.toString()); }}
             className="w-4 h-4 accent-amber-500"
           />
           Show Only Uniques
@@ -1158,7 +1158,7 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
           <input
             type="checkbox"
             checked={hideUnknownRuns}
-            onChange={(e) => setHideUnknownRuns(e.target.checked)}
+            onChange={(e) => { setHideUnknownRuns(e.target.checked); localStorage.setItem('rs3-barrows-hide-unknown-runs', e.target.checked.toString()); }}
             className="w-4 h-4 accent-amber-500"
           />
           Hide Unknown Runs
@@ -1167,7 +1167,7 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
           <input
             type="checkbox"
             checked={hideCorruptionSigil}
-            onChange={(e) => setHideCorruptionSigil(e.target.checked)}
+            onChange={(e) => { setHideCorruptionSigil(e.target.checked); localStorage.setItem('rs3-barrows-hide-corruption', e.target.checked.toString()); }}
             className="w-4 h-4 accent-amber-500"
           />
           Hide Corruption Sigil
