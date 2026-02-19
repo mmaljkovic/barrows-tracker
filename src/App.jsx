@@ -401,7 +401,7 @@ const BarrowsTracker = () => {
       // Parse date if provided (and not "-")
       let timestamp = null;
       if (dateStr && dateStr !== '-') {
-        const parsedDate = new Date(dateStr);
+        const parsedDate = new Date(dateStr + 'T00:00:00');
         if (isNaN(parsedDate.getTime())) {
           errors.push({
             line: index + 1,
@@ -698,7 +698,6 @@ const BarrowsTracker = () => {
         <AddDropModal
           killCount={killCount}
           linzaKillCount={linzaKillCount}
-          dropHistory={dropHistory}
           onAdd={(items, kc, isLinza) => {
             addDrops(items, kc, isLinza);
             const label = items.length === 1 ? items[0] : `${items.length} items`;
@@ -1032,7 +1031,7 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
 
   const handleBulkDateUpdate = () => {
     if (selectedDrops.size === 0 || !bulkEditDate) return;
-    const newTimestamp = new Date(bulkEditDate).toISOString();
+    const newTimestamp = new Date(bulkEditDate + 'T00:00:00').toISOString();
     selectedDrops.forEach(dropId => {
       const drop = stats.dropsWithDryStreak.find(d => d.id === dropId);
       if (drop) {
@@ -1135,7 +1134,7 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
       const newKC = editValue === '' ? null : parseInt(editValue);
       updateDrop(drop.id, newKC, drop.timestamp || null);
     } else if (editingCell.field === 'date') {
-      const newDate = editValue ? new Date(editValue).toISOString() : null;
+      const newDate = editValue ? new Date(editValue + 'T00:00:00').toISOString() : null;
       updateDrop(drop.id, drop.killCount, newDate);
     }
     setEditingCell(null);
@@ -1326,7 +1325,7 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
                   ) : (
                     <span
                       className="font-semibold cursor-pointer hover:text-amber-300 hover:underline"
-                      onClick={() => startEdit(drop.id, 'date', drop.timestamp ? new Date(drop.timestamp).toISOString().split('T')[0] : '')}
+                      onClick={() => startEdit(drop.id, 'date', drop.timestamp ? new Date(drop.timestamp).toLocaleDateString('en-CA') : '')}
                       title="Click to edit"
                     >
                       {drop.timestamp ? new Date(drop.timestamp).toLocaleDateString() : '-'}
@@ -1397,25 +1396,19 @@ const DailySummaryTab = ({ dailySummary }) => {
   );
 };
 
-const AddDropModal = ({ killCount, linzaKillCount, dropHistory = [], onAdd, onClose }) => {
+const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [dropKC, setDropKC] = useState(killCount.toString());
   const [isLinza, setIsLinza] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const searchRef = useRef(null);
+  const dropdownRef = useRef(null);
 
-  // Compute recent unique items from drop history
-  const recentItems = (() => {
-    const seen = new Set();
-    const recent = [];
-    for (let i = dropHistory.length - 1; i >= 0 && recent.length < 5; i--) {
-      const item = dropHistory[i].item;
-      if (!seen.has(item)) {
-        seen.add(item);
-        recent.push(item);
-      }
-    }
-    return recent;
-  })();
+  // Flat list of all items with brother info
+  const allItems = Object.entries(BARROWS_DATA).flatMap(([brother, items]) =>
+    items.map(item => ({ ...item, brother }))
+  );
 
   // Find item image from BARROWS_DATA
   const getItemImg = (itemName) => {
@@ -1426,12 +1419,34 @@ const AddDropModal = ({ killCount, linzaKillCount, dropHistory = [], onAdd, onCl
     return null;
   };
 
-  const toggleItem = (itemName) => {
-    setSelectedItems(prev =>
-      prev.includes(itemName)
-        ? prev.filter(i => i !== itemName)
-        : [...prev, itemName]
-    );
+  // Filtered items for dropdown
+  const filteredItems = searchQuery.trim()
+    ? allItems.filter(item =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.brother.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : allItems;
+
+  // Group filtered items by brother for display
+  const groupedFilteredItems = {};
+  filteredItems.forEach(item => {
+    if (!groupedFilteredItems[item.brother]) groupedFilteredItems[item.brother] = [];
+    groupedFilteredItems[item.brother].push(item);
+  });
+
+  const selectFromDropdown = (itemName) => {
+    if (!selectedItems.includes(itemName)) {
+      setSelectedItems(prev => [...prev, itemName]);
+    } else {
+      setSelectedItems(prev => prev.filter(i => i !== itemName));
+    }
+    setSearchQuery('');
+    setIsDropdownOpen(false);
+    searchRef.current?.focus();
+  };
+
+  const removeItem = (itemName) => {
+    setSelectedItems(prev => prev.filter(i => i !== itemName));
   };
 
   const handleAdd = () => {
@@ -1441,142 +1456,149 @@ const AddDropModal = ({ killCount, linzaKillCount, dropHistory = [], onAdd, onCl
     }
   };
 
-  // Filter brothers and items based on search query
-  const getFilteredData = () => {
-    if (!searchQuery.trim()) {
-      return BARROWS_DATA;
-    }
-
-    const query = searchQuery.toLowerCase();
-    const filtered = {};
-
-    Object.entries(BARROWS_DATA).forEach(([brother, items]) => {
-      const matchingItems = items.filter(item =>
-        item.name.toLowerCase().includes(query) ||
-        brother.toLowerCase().includes(query)
-      );
-      if (matchingItems.length > 0) {
-        filtered[brother] = matchingItems;
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e) => {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+        searchRef.current && !searchRef.current.contains(e.target)
+      ) {
+        setIsDropdownOpen(false);
       }
-    });
-
-    return filtered;
-  };
-
-  const filteredData = getFilteredData();
-  const hasResults = Object.keys(filteredData).length > 0;
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
-      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-4xl w-full border-4 border-amber-900 max-h-[90vh] overflow-y-auto rs-border">
+      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-lg w-full border-4 border-amber-900 rs-border">
         <h3 className="text-2xl font-bold rs-text-gold mb-4">Add Drop(s)</h3>
         <div className="space-y-4">
-          <div>
-            <label className="block text-amber-200 mb-2 font-semibold">Obtained at Run #</label>
-            <input
-              type="number"
-              value={dropKC}
-              onChange={(e) => setDropKC(e.target.value)}
-              className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
-            />
+
+          {/* Run # and Linza on same row */}
+          <div className="flex items-end gap-4">
+            <div className="flex-1">
+              <label className="block text-amber-200 mb-1.5 font-semibold text-sm">Obtained at Run #</label>
+              <input
+                type="number"
+                value={dropKC}
+                onChange={(e) => setDropKC(e.target.value)}
+                className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-violet-200 text-sm font-semibold cursor-pointer pb-2">
+              <input
+                type="checkbox"
+                checked={isLinza}
+                onChange={(e) => {
+                  setIsLinza(e.target.checked);
+                  if (e.target.checked) {
+                    setDropKC(linzaKillCount.toString());
+                  } else {
+                    setDropKC(killCount.toString());
+                  }
+                }}
+                className="w-4 h-4 accent-violet-500"
+              />
+              Linza Run
+            </label>
           </div>
 
-          <label className="flex items-center gap-2 text-violet-200 text-sm font-semibold cursor-pointer">
+          {/* Searchable combobox */}
+          <div className="relative">
+            <label className="block text-amber-200 mb-1.5 font-semibold text-sm">
+              Add Item
+              {selectedItems.length > 0 && (
+                <span className="text-amber-300 ml-2">({selectedItems.length} selected)</span>
+              )}
+            </label>
             <input
-              type="checkbox"
-              checked={isLinza}
+              ref={searchRef}
+              type="text"
+              value={searchQuery}
               onChange={(e) => {
-                setIsLinza(e.target.checked);
-                if (e.target.checked) {
-                  setDropKC(linzaKillCount.toString());
-                } else {
-                  setDropKC(killCount.toString());
+                setSearchQuery(e.target.value);
+                setIsDropdownOpen(true);
+              }}
+              onFocus={() => setIsDropdownOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setIsDropdownOpen(false);
+                  setSearchQuery('');
                 }
               }}
-              className="w-4 h-4 accent-violet-500"
+              placeholder="Type to search items or brothers..."
+              className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 focus:border-amber-600 outline-none"
             />
-            Linza Run
-          </label>
 
-          {recentItems.length > 0 && (
+            {/* Dropdown list */}
+            {isDropdownOpen && (
+              <div
+                ref={dropdownRef}
+                className="absolute top-full left-0 right-0 mt-1 bg-stone-900 border-2 border-amber-900 rounded shadow-xl z-10 max-h-56 overflow-y-auto"
+              >
+                {filteredItems.length === 0 ? (
+                  <div className="text-amber-300 text-center py-4 text-sm">No items found</div>
+                ) : (
+                  Object.entries(groupedFilteredItems).map(([brother, items]) => (
+                    <div key={brother}>
+                      <div className="px-3 py-1 text-xs font-bold text-amber-500 bg-stone-950 sticky top-0">
+                        {brother}
+                      </div>
+                      {items.map(item => {
+                        const isSelected = selectedItems.includes(item.name);
+                        return (
+                          <button
+                            key={item.name}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => selectFromDropdown(item.name)}
+                            className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-all hover:bg-stone-700 ${
+                              isSelected ? 'bg-stone-800' : ''
+                            }`}
+                          >
+                            <img src={item.img} alt={item.name} className="w-6 h-6 object-contain flex-shrink-0" />
+                            <span className="text-amber-100 text-sm flex-1">{item.name}</span>
+                            {isSelected && <span className="text-amber-500 text-xs font-bold">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Selected item chips */}
+          {selectedItems.length > 0 && (
             <div>
-              <label className="block text-amber-200 mb-2 font-semibold text-sm">Recent Drops</label>
+              <label className="block text-amber-200 mb-2 font-semibold text-sm">Selected</label>
               <div className="flex flex-wrap gap-2">
-                {recentItems.map(itemName => {
+                {selectedItems.map(itemName => {
                   const img = getItemImg(itemName);
                   return (
-                    <button
+                    <div
                       key={itemName}
-                      onClick={() => toggleItem(itemName)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded transition-all text-left border-2 text-sm ${
-                        selectedItems.includes(itemName)
-                          ? 'bg-gradient-to-b from-amber-700 to-amber-900 border-amber-950'
-                          : 'bg-gradient-to-b from-stone-700 to-stone-800 hover:from-stone-600 hover:to-stone-700 border-stone-950'
-                      }`}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded bg-gradient-to-b from-amber-700 to-amber-900 border-2 border-amber-950 text-sm"
                     >
-                      {img && <img src={img} alt={itemName} className="w-6 h-6 object-contain" />}
+                      {img && <img src={img} alt={itemName} className="w-5 h-5 object-contain" />}
                       <span className="text-amber-100 font-semibold">{itemName}</span>
-                    </button>
+                      <button
+                        onClick={() => removeItem(itemName)}
+                        className="text-amber-300 hover:text-red-400 transition-colors ml-1 font-bold leading-none"
+                      >
+                        ×
+                      </button>
+                    </div>
                   );
                 })}
               </div>
             </div>
           )}
 
-          <div>
-            <label className="block text-amber-200 mb-2 font-semibold">Search Items</label>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by item name or brother..."
-              className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
-            />
-          </div>
-
-          <div>
-            <label className="block text-amber-200 mb-2 font-semibold">
-              Items (select one or more)
-              <span className="text-amber-300 text-sm ml-2">
-                Selected: {selectedItems.length} item(s)
-              </span>
-            </label>
-            <div className="bg-stone-900 rounded p-4 max-h-[50vh] overflow-y-auto border-2 border-amber-900">
-              {!hasResults ? (
-                <div className="text-amber-300 text-center py-8">
-                  No items found matching "{searchQuery}"
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {Object.entries(filteredData).map(([brother, items]) => (
-                    <div key={brother}>
-                      <h4 className="text-lg font-bold text-amber-300 mb-2 border-b border-amber-800 pb-1">
-                        {brother}
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {items.map(item => (
-                          <button
-                            key={item.name}
-                            onClick={() => toggleItem(item.name)}
-                            className={`flex items-center gap-3 p-2 rounded transition-all text-left border-2 ${
-                              selectedItems.includes(item.name)
-                                ? 'bg-gradient-to-b from-amber-700 to-amber-900 hover:from-amber-600 hover:to-amber-800 border-amber-950'
-                                : 'bg-gradient-to-b from-stone-800 to-stone-950 hover:from-stone-700 hover:to-stone-900 border-stone-950'
-                            }`}
-                          >
-                            <img src={item.img} alt={item.name} className="w-8 h-8 object-contain" />
-                            <span className="text-amber-100 text-sm font-semibold">{item.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-2">
+          {/* Action buttons */}
+          <div className="flex gap-2 pt-1">
             <button
               onClick={handleAdd}
               disabled={selectedItems.length === 0}
@@ -1591,6 +1613,7 @@ const AddDropModal = ({ killCount, linzaKillCount, dropHistory = [], onAdd, onCl
               Cancel
             </button>
           </div>
+
         </div>
       </div>
     </div>
@@ -1659,7 +1682,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
       // Parse date if provided (and not "-")
       let timestamp = null;
       if (dateStr && dateStr !== '-') {
-        const parsedDate = new Date(dateStr);
+        const parsedDate = new Date(dateStr + 'T00:00:00');
         if (isNaN(parsedDate.getTime())) {
           errors.push({
             line: index + 1,
