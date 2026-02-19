@@ -999,7 +999,12 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
 const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil, hideUnknownRuns, setHideUnknownRuns, showOnlyUniques, setShowOnlyUniques }) => {
   const [editingCell, setEditingCell] = useState(null); // { dropId, field: 'kc' | 'date' }
   const [editValue, setEditValue] = useState('');
-  const [sortConfig, setSortConfig] = useState({ column: null, direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rs3-barrows-drop-sort');
+      return saved ? JSON.parse(saved) : { column: null, direction: 'asc' };
+    } catch { return { column: null, direction: 'asc' }; }
+  });
   const [selectedDrops, setSelectedDrops] = useState(new Set());
   const [bulkEditDate, setBulkEditDate] = useState('');
 
@@ -1050,16 +1055,11 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
   };
 
   const handleSort = (column) => {
-    if (sortConfig.column === column) {
-      // Toggle direction if same column
-      setSortConfig({
-        column,
-        direction: sortConfig.direction === 'asc' ? 'desc' : 'asc'
-      });
-    } else {
-      // Set new column with ascending direction
-      setSortConfig({ column, direction: 'asc' });
-    }
+    const next = sortConfig.column === column
+      ? { column, direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' }
+      : { column, direction: 'asc' };
+    setSortConfig(next);
+    localStorage.setItem('rs3-barrows-drop-sort', JSON.stringify(next));
   };
 
   const getSortedData = () => {
