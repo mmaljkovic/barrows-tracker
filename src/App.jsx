@@ -472,47 +472,51 @@ const BarrowsTracker = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 mb-4">
-            <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold">Runs</div>
-              <div className="text-2xl font-bold rs-text-gold">{killCount + linzaKillCount}</div>
-              <div className="text-xs text-amber-300 mt-0.5">
-                <span>Full: {killCount}</span>
-                {linzaKillCount > 0 && <span className="text-violet-300"> / Linza: {linzaKillCount}</span>}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+            {/* Runs card with inline + buttons */}
+            <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 border-2 border-amber-900 shadow-inner">
+              <div className="text-amber-200 text-sm font-semibold text-center">Runs</div>
+              <div className="text-2xl font-bold rs-text-gold text-center">{killCount + linzaKillCount}</div>
+              <div className="flex items-center justify-center gap-3 mt-1">
+                <button
+                  onClick={() => { incrementKC(); addToast(`Run ${killCount + 1} added`, { undoAction: { type: 'run', isLinza: false } }); }}
+                  className="flex items-center gap-1 text-xs text-amber-300 hover:text-amber-100 transition-colors group"
+                  title="Add full run"
+                >
+                  <span className="w-4 h-4 rounded bg-amber-800 group-hover:bg-amber-600 flex items-center justify-center text-white text-[10px] font-bold transition-colors">+</span>
+                  <span>Full: {killCount}</span>
+                </button>
+                <button
+                  onClick={() => { incrementLinzaKC(); addToast(`Linza run ${linzaKillCount + 1} added`, { undoAction: { type: 'run', isLinza: true } }); }}
+                  className="flex items-center gap-1 text-xs text-violet-300 hover:text-violet-100 transition-colors group"
+                  title="Add Linza run"
+                >
+                  <span className="w-4 h-4 rounded bg-violet-800 group-hover:bg-violet-600 flex items-center justify-center text-white text-[10px] font-bold transition-colors">+</span>
+                  <span>Linza: {linzaKillCount}</span>
+                </button>
               </div>
             </div>
+            {/* Dry Streak */}
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
               <div className="text-amber-200 text-sm font-semibold">Dry Streak</div>
               <div className="text-2xl font-bold text-orange-400">{stats.currentDryStreak}</div>
             </div>
+            {/* Drops: total + uniques + completion % */}
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold">Total Drops</div>
+              <div className="text-amber-200 text-sm font-semibold">Drops</div>
               <div className="text-2xl font-bold text-emerald-400">{stats.totalDrops}</div>
+              <div className="text-xs text-amber-300 mt-0.5">
+                {stats.uniquesObtained}/{totalUniques} uniques ({Math.round((stats.uniquesObtained / totalUniques) * 100)}%)
+              </div>
             </div>
-            <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold">Unique Items</div>
-              <div className="text-2xl font-bold text-amber-400">{stats.uniquesObtained}/{totalUniques}</div>
-            </div>
-            <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold">Completion</div>
-              <div className="text-2xl font-bold rs-text-yellow">{Math.round((stats.uniquesObtained/totalUniques)*100)}%</div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {/* Main Actions */}
-            <div className="flex gap-2 flex-wrap">
-              <button onClick={() => { incrementKC(); addToast(`Run ${killCount + 1} added`, { undoAction: { type: 'run', isLinza: false } }); }} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
-                <Plus className="w-4 h-4" /> Add Run
-              </button>
-              <button onClick={() => { incrementLinzaKC(); addToast(`Linza run ${linzaKillCount + 1} added`, { undoAction: { type: 'run', isLinza: true } }); }} className="bg-gradient-to-b from-violet-600 to-violet-800 hover:from-violet-500 hover:to-violet-700 text-white px-4 py-2 rounded border-2 border-violet-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
-                <Plus className="w-4 h-4" /> Add Linza Run
-              </button>
-              <button onClick={() => setShowAddDrop(true)} className="bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded border-2 border-emerald-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
-                <Plus className="w-4 h-4" /> Add Drop
-              </button>
-            </div>
-
+            {/* Add Drop card */}
+            <button
+              onClick={() => setShowAddDrop(true)}
+              className="bg-gradient-to-br from-emerald-950 to-stone-900 hover:from-emerald-900 hover:to-stone-800 rounded p-3 text-center border-2 border-emerald-800 shadow-inner transition-colors cursor-pointer"
+            >
+              <div className="text-emerald-300 text-sm font-semibold">Add Drop</div>
+              <Plus className="w-6 h-6 text-emerald-400 mx-auto mt-1" />
+            </button>
           </div>
         </div>
 
