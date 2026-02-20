@@ -293,10 +293,13 @@ const BarrowsTracker = () => {
     const allDates = new Set([...Object.keys(runsByDate), ...Object.keys(dropsByDate)]);
     const sortedDates = Array.from(allDates).sort();
 
+    let cumulativeRuns = 0;
     return sortedDates.map(date => {
       const dayDrops = dropsByDate[date] || { drops: [], uniques: 0 };
       const dayRuns = runsByDate[date] || { full: 0, linza: 0 };
       const totalRuns = dayRuns.full + dayRuns.linza;
+      const startingRun = totalRuns > 0 ? cumulativeRuns + 1 : null;
+      cumulativeRuns += totalRuns;
 
       return {
         date,
@@ -304,7 +307,8 @@ const BarrowsTracker = () => {
         runs: totalRuns > 0 ? totalRuns : null,
         fullRuns: dayRuns.full > 0 ? dayRuns.full : null,
         linzaRuns: dayRuns.linza > 0 ? dayRuns.linza : null,
-        uniques: dayDrops.uniques
+        uniques: dayDrops.uniques,
+        startingRun
       };
     }).reverse(); // Newest first
   };
@@ -1381,6 +1385,7 @@ const DailySummaryTab = ({ dailySummary }) => {
             <thead className="bg-gradient-to-b from-amber-800 to-amber-950 sticky top-0 z-10">
               <tr className="border-b-2 border-amber-700">
                 <th className="px-4 py-2 text-left rs-text-gold font-bold">Date</th>
+                <th className="px-4 py-2 text-center rs-text-gold font-bold">Starting Run #</th>
                 <th className="px-4 py-2 text-center rs-text-gold font-bold">Drops</th>
                 <th className="px-4 py-2 text-center rs-text-gold font-bold">Full Runs</th>
                 <th className="px-4 py-2 text-center rs-text-gold font-bold">Linza Runs</th>
@@ -1398,6 +1403,7 @@ const DailySummaryTab = ({ dailySummary }) => {
                       day: 'numeric'
                     })}
                   </td>
+                  <td className="px-4 py-2 text-center text-stone-400 font-semibold">{day.startingRun ?? '-'}</td>
                   <td className="px-4 py-2 text-center text-emerald-400 font-bold">{day.drops}</td>
                   <td className="px-4 py-2 text-center text-stone-200 font-semibold">{day.fullRuns ?? '-'}</td>
                   <td className="px-4 py-2 text-center text-violet-400 font-semibold">{day.linzaRuns ?? '-'}</td>
