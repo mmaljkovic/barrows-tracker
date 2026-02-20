@@ -7,6 +7,10 @@
     font-family: 'Cinzel', serif;
   }
 
+  input[type="checkbox"] {
+    color-scheme: dark;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: 'MedievalSharp', cursive;
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, Trash2, Settings, Award, ArrowLeft, Download, Upload, LogIn, X, BookOpen, ScrollText, CalendarDays } from 'lucide-react';
+import { Plus, Trash2, Settings, Award, ArrowLeft, Download, Upload, LogIn, X, BookOpen, ScrollText, CalendarDays, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { useBarrowsData } from './hooks/useBarrowsData';
 import AuthModal from './components/Auth/AuthModal';
@@ -254,10 +254,11 @@ const BarrowsTracker = () => {
     });
 
     // Calculate current dry streak (runs since last known drop)
-    const lastKnownDropKC = sortedKnown.length > 0 ? sortedKnown[sortedKnown.length - 1].killCount : 0;
+    const lastKnownDrop = sortedKnown.length > 0 ? sortedKnown[sortedKnown.length - 1] : null;
+    const lastKnownDropKC = lastKnownDrop ? lastKnownDrop.killCount : 0;
     const currentDryStreak = killCount - lastKnownDropKC;
 
-    return { uniquesObtained, totalDrops, dropsWithDryStreak, currentDryStreak };
+    return { uniquesObtained, totalDrops, dropsWithDryStreak, currentDryStreak, lastKnownDrop };
   };
 
   const calculateDailySummary = (dropsWithDryStreak, runHistoryData) => {
@@ -446,13 +447,13 @@ const BarrowsTracker = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-950 via-stone-900 to-neutral-950 p-4">
       <div className="max-w-7xl mx-auto">
-        <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 mb-6 border-4 border-amber-900 rs-border">
+        <div className="bg-gradient-to-br from-stone-900 to-stone-950 rounded-lg shadow-2xl p-6 mb-6 border-4 border-amber-900 rs-border">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <img src="/barrows-images/strange_old_man.png" alt="Strange Old Man" className="w-16 h-16 object-contain" />
               <div>
                 <h1 className="text-4xl font-bold rs-text-gold">Barrows Graverobber Tracker</h1>
-                <p className="text-amber-200 font-semibold text-sm tracking-wider">RUNESCAPE 3</p>
+                <p className="text-stone-200 font-semibold text-sm tracking-wider">RUNESCAPE 3</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -463,7 +464,7 @@ const BarrowsTracker = () => {
                 ) : (
                   <button
                     onClick={() => setShowAuthModal(true)}
-                    className="flex items-center gap-2 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
+                    className="flex items-center gap-2 bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
                   >
                     <LogIn className="w-4 h-4" /> Sign In
                   </button>
@@ -475,38 +476,55 @@ const BarrowsTracker = () => {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
             {/* Runs card with inline + buttons */}
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold text-center">Runs</div>
+              <div className="text-stone-200 text-sm font-semibold text-center">Runs</div>
               <div className="text-2xl font-bold rs-text-gold text-center">{killCount + linzaKillCount}</div>
-              <div className="flex items-center justify-center gap-3 mt-1">
+              <div className="flex gap-1.5 mt-2">
                 <button
                   onClick={() => { incrementKC(); addToast(`Run ${killCount + 1} added`, { undoAction: { type: 'run', isLinza: false } }); }}
-                  className="flex items-center gap-1 text-xs text-amber-300 hover:text-amber-100 transition-colors group"
+                  className="flex-1 flex items-center justify-between px-2 py-1.5 rounded bg-stone-800/80 hover:bg-stone-700/80 border border-stone-700 transition-colors group"
                   title="Add full run"
                 >
-                  <span className="w-4 h-4 rounded bg-amber-800 group-hover:bg-amber-600 flex items-center justify-center text-white text-[10px] font-bold transition-colors">+</span>
-                  <span>Full: {killCount}</span>
+                  <span className="text-stone-300 text-xs font-semibold">Full</span>
+                  <span className="text-sm font-bold text-stone-100">{killCount}</span>
+                  <span className="w-4 h-4 rounded bg-stone-600 group-hover:bg-stone-500 flex items-center justify-center text-white text-[10px] font-bold transition-colors shrink-0">+</span>
                 </button>
                 <button
                   onClick={() => { incrementLinzaKC(); addToast(`Linza run ${linzaKillCount + 1} added`, { undoAction: { type: 'run', isLinza: true } }); }}
-                  className="flex items-center gap-1 text-xs text-violet-300 hover:text-violet-100 transition-colors group"
+                  className="flex-1 flex items-center justify-between px-2 py-1.5 rounded bg-violet-950/50 hover:bg-violet-900/50 border border-violet-900/50 transition-colors group"
                   title="Add Linza run"
                 >
-                  <span className="w-4 h-4 rounded bg-violet-800 group-hover:bg-violet-600 flex items-center justify-center text-white text-[10px] font-bold transition-colors">+</span>
-                  <span>Linza: {linzaKillCount}</span>
+                  <span className="text-violet-300 text-xs font-semibold">Linza</span>
+                  <span className="text-sm font-bold text-violet-200">{linzaKillCount}</span>
+                  <span className="w-4 h-4 rounded bg-violet-800 group-hover:bg-violet-700 flex items-center justify-center text-white text-[10px] font-bold transition-colors shrink-0">+</span>
                 </button>
               </div>
             </div>
             {/* Dry Streak */}
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold">Dry Streak</div>
+              <div className="text-stone-200 text-sm font-semibold">Dry Streak</div>
               <div className="text-2xl font-bold text-orange-400">{stats.currentDryStreak}</div>
+              {stats.lastKnownDrop && (
+                <div className="mt-1.5">
+                  <div className="text-stone-300 text-xs font-semibold truncate">{stats.lastKnownDrop.item}</div>
+                  <div className="text-stone-400 text-xs">Run #{stats.lastKnownDrop.killCount}</div>
+                </div>
+              )}
             </div>
             {/* Drops: total + uniques + completion % */}
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-              <div className="text-amber-200 text-sm font-semibold">Drops</div>
+              <div className="text-stone-200 text-sm font-semibold">Drops</div>
               <div className="text-2xl font-bold text-emerald-400">{stats.totalDrops}</div>
-              <div className="text-xs text-amber-300 mt-0.5">
-                {stats.uniquesObtained}/{totalUniques} uniques ({Math.round((stats.uniquesObtained / totalUniques) * 100)}%)
+              <div className="mt-1.5">
+                <div className="flex justify-between items-baseline text-xs mb-1 px-0.5">
+                  <span className="text-stone-300 font-semibold">{stats.uniquesObtained}/{totalUniques} uniques</span>
+                  <span className="text-yellow-400 font-bold">{Math.round((stats.uniquesObtained / totalUniques) * 100)}%</span>
+                </div>
+                <div className="w-full h-1.5 bg-stone-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-yellow-700 to-yellow-500 transition-all duration-300 rounded-full"
+                    style={{ width: `${Math.round((stats.uniquesObtained / totalUniques) * 100)}%` }}
+                  />
+                </div>
               </div>
             </div>
             {/* Add Drop card */}
@@ -520,7 +538,7 @@ const BarrowsTracker = () => {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl border-4 border-amber-900 overflow-hidden rs-border">
+        <div className="bg-gradient-to-br from-stone-900 to-stone-950 rounded-lg shadow-2xl border-4 border-amber-900 overflow-hidden rs-border">
           <div className="flex flex-col md:flex-row">
             {/* Desktop sidebar */}
             <nav className="hidden md:flex flex-col w-14 bg-gradient-to-b from-stone-900 to-stone-950 border-r-2 border-amber-900 py-2 shrink-0">
@@ -533,13 +551,13 @@ const BarrowsTracker = () => {
                     onClick={() => setActiveTab(tab.id)}
                     className={`group relative flex items-center justify-center w-full h-12 transition-colors ${
                       isActive
-                        ? 'text-amber-200 bg-stone-700/50 border-l-[3px] border-amber-500'
-                        : 'text-amber-500/60 hover:text-amber-300 hover:bg-stone-800/50 border-l-[3px] border-transparent'
+                        ? 'text-yellow-200 bg-stone-700/50 border-l-[3px] border-yellow-500'
+                        : 'text-stone-400/80 hover:text-yellow-300 hover:bg-stone-800/50 border-l-[3px] border-transparent'
                     }`}
                     aria-label={tab.label}
                   >
                     <Icon className="w-5 h-5" />
-                    <span className="absolute left-full ml-2 px-2 py-1 bg-stone-900 border border-amber-800 text-amber-100 text-xs font-semibold rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
+                    <span className="absolute left-full ml-2 px-2 py-1 bg-stone-900 border border-amber-800 text-stone-100 text-xs font-semibold rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
                       {tab.label}
                     </span>
                   </button>
@@ -558,8 +576,8 @@ const BarrowsTracker = () => {
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
                       isActive
-                        ? 'text-amber-200 bg-stone-700/50 border-b-[3px] border-amber-500'
-                        : 'text-amber-500/60 hover:text-amber-300 border-b-[3px] border-transparent'
+                        ? 'text-yellow-200 bg-stone-700/50 border-b-[3px] border-yellow-500'
+                        : 'text-stone-400/80 hover:text-yellow-300 border-b-[3px] border-transparent'
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -604,30 +622,30 @@ const BarrowsTracker = () => {
                   <h2 className="text-xl font-bold rs-text-gold">Settings</h2>
 
                   {/* Set Run Count */}
-                  <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg border-2 border-amber-900 shadow-xl p-4 space-y-3">
-                    <h3 className="text-amber-200 font-bold">Set Run Count</h3>
+                  <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg border-2 border-amber-900 shadow-xl p-4 space-y-3">
+                    <h3 className="text-stone-200 font-bold">Set Run Count</h3>
                     <div className="flex gap-2 flex-wrap">
                       <input
                         type="number"
                         value={kcInput}
                         onChange={(e) => setKcInput(e.target.value)}
                         placeholder="Run Count"
-                        className="bg-stone-800 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 w-40"
+                        className="bg-stone-800 text-stone-100 px-4 py-2 rounded border-2 border-amber-900 w-40"
                       />
-                      <button onClick={handleSetKCManual} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold min-w-32">
+                      <button onClick={handleSetKCManual} className="bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold min-w-32">
                         Set Run Count
                       </button>
                     </div>
                   </div>
 
                   {/* Import / Export / Setup */}
-                  <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg border-2 border-amber-900 shadow-xl p-4 space-y-3">
-                    <h3 className="text-amber-200 font-bold">Data Management</h3>
+                  <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg border-2 border-amber-900 shadow-xl p-4 space-y-3">
+                    <h3 className="text-stone-200 font-bold">Data Management</h3>
                     <div className="flex gap-2 flex-wrap">
-                      <button onClick={() => setShowImport(true)} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
+                      <button onClick={() => setShowImport(true)} className="bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
                         <Upload className="w-4 h-4" /> Import
                       </button>
-                      <button onClick={() => setShowExport(true)} className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
+                      <button onClick={() => setShowExport(true)} className="bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
                         <Download className="w-4 h-4" /> Export
                       </button>
                       <button onClick={() => setShowSetup(true)} className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-4 py-2 rounded border-2 border-stone-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
@@ -637,8 +655,8 @@ const BarrowsTracker = () => {
                   </div>
 
                   {/* Run History Backfill */}
-                  <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg border-2 border-amber-900 shadow-xl p-4 space-y-3">
-                    <h3 className="text-amber-200 font-bold">Run History Backfill</h3>
+                  <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg border-2 border-amber-900 shadow-xl p-4 space-y-3">
+                    <h3 className="text-stone-200 font-bold">Run History Backfill</h3>
                     <div className="flex gap-2 flex-wrap items-end">
                       <button
                         onClick={async () => {
@@ -659,13 +677,13 @@ const BarrowsTracker = () => {
                           value={bulkRunCount}
                           onChange={(e) => setBulkRunCount(e.target.value)}
                           placeholder="# Runs"
-                          className="bg-stone-800 text-amber-100 px-2 py-2 rounded border-2 border-amber-900 w-24 text-sm"
+                          className="bg-stone-800 text-stone-100 px-2 py-2 rounded border-2 border-amber-900 w-24 text-sm"
                         />
                         <input
                           type="date"
                           value={bulkRunDate}
                           onChange={(e) => setBulkRunDate(e.target.value)}
-                          className="bg-stone-800 text-amber-100 px-2 py-2 rounded border-2 border-amber-900 text-sm"
+                          className="bg-stone-800 text-stone-100 px-2 py-2 rounded border-2 border-amber-900 text-sm"
                         />
                         <button
                           onClick={async () => {
@@ -680,7 +698,7 @@ const BarrowsTracker = () => {
                               setBulkRunDate('');
                             }
                           }}
-                          className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
+                          className="bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
                         >
                           Add Runs
                         </button>
@@ -747,11 +765,11 @@ const SetupScreen = ({ onComplete, onSkip, hasExistingData }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-950 via-stone-900 to-neutral-950 p-4 flex items-center justify-center">
-      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-8 max-w-md w-full border-4 border-amber-900 rs-border">
+      <div className="bg-gradient-to-br from-stone-900 to-stone-950 rounded-lg shadow-2xl p-8 max-w-md w-full border-4 border-amber-900 rs-border">
         {hasExistingData && (
           <button
             onClick={onSkip}
-            className="mb-4 text-amber-300 hover:text-yellow-200 flex items-center gap-2 font-semibold"
+            className="mb-4 text-stone-300 hover:text-yellow-200 flex items-center gap-2 font-semibold"
           >
             <ArrowLeft className="w-4 h-4" /> Back to Tracker
           </button>
@@ -761,22 +779,22 @@ const SetupScreen = ({ onComplete, onSkip, hasExistingData }) => {
         </h2>
         <div className="space-y-4">
           <div>
-            <label className="block text-amber-200 mb-2 font-semibold">Starting Run Count</label>
+            <label className="block text-stone-200 mb-2 font-semibold">Starting Run Count</label>
             <input
               type="number"
               value={kc}
               onChange={(e) => setKc(e.target.value)}
-              className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
+              className="w-full bg-stone-900 text-stone-100 px-4 py-2 rounded border-2 border-amber-900"
               placeholder="0"
             />
           </div>
-          <p className="text-amber-300 text-sm">
+          <p className="text-stone-300 text-sm">
             You can add historical drops after setup using the "Add Drop" or "Bulk Add" buttons.
           </p>
           <div className="flex gap-2">
             <button
               onClick={handleFinish}
-              className="flex-1 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-6 py-3 rounded border-2 border-amber-900 shadow-lg font-bold"
+              className="flex-1 bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-6 py-3 rounded border-2 border-amber-900 shadow-lg font-bold"
             >
               {hasExistingData ? 'Reset & Start' : 'Start Tracking'}
             </button>
@@ -842,50 +860,46 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
 
   return (
     <div className="space-y-4">
-      {/* Controls */}
-      <div className="flex flex-wrap gap-4 items-center justify-between bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg p-3 border-2 border-amber-800">
-        {/* View Controls */}
-        <div className="flex gap-2">
+      <div className="flex flex-wrap gap-x-4 gap-y-3 items-center justify-between">
+        <h2 className="text-xl font-bold rs-text-gold">Collection Log</h2>
+        <div className="flex flex-wrap gap-x-4 gap-y-2 items-center bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg px-4 py-2 border-2 border-amber-800">
           <button
             onClick={expandAll}
-            className="text-amber-300 hover:text-amber-200 text-sm font-semibold px-3 py-1 border border-amber-800 rounded"
+            className="text-stone-300 hover:text-stone-200 text-sm font-semibold"
           >
             Expand All
           </button>
           <button
             onClick={collapseAll}
-            className="text-amber-300 hover:text-amber-200 text-sm font-semibold px-3 py-1 border border-amber-800 rounded"
+            className="text-stone-300 hover:text-stone-200 text-sm font-semibold"
           >
             Collapse All
           </button>
-        </div>
-
-        {/* Filter & Display Options */}
-        <div className="flex flex-wrap gap-4 items-center">
-          <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
+          <div className="hidden sm:block w-px h-5 bg-amber-800/60 shrink-0" />
+          <label className="flex items-center gap-2 text-stone-200 text-sm font-semibold cursor-pointer">
             <input
               type="checkbox"
               checked={compactView}
               onChange={(e) => { setCompactView(e.target.checked); localStorage.setItem('rs3-barrows-compact-view', e.target.checked.toString()); }}
-              className="w-4 h-4 accent-amber-500"
+              className="w-4 h-4 accent-yellow-600"
             />
             Compact View
           </label>
-          <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
+          <label className="flex items-center gap-2 text-stone-200 text-sm font-semibold cursor-pointer">
             <input
               type="checkbox"
               checked={hideCompleted}
               onChange={(e) => { setHideCompleted(e.target.checked); localStorage.setItem('rs3-barrows-hide-completed', e.target.checked.toString()); }}
-              className="w-4 h-4 accent-amber-500"
+              className="w-4 h-4 accent-yellow-600"
             />
             Hide Completed Sets
           </label>
-          <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
+          <label className="flex items-center gap-2 text-stone-200 text-sm font-semibold cursor-pointer">
             <input
               type="checkbox"
               checked={showOnlyMissing}
               onChange={(e) => { setShowOnlyMissing(e.target.checked); localStorage.setItem('rs3-barrows-show-only-missing', e.target.checked.toString()); }}
-              className="w-4 h-4 accent-amber-500"
+              className="w-4 h-4 accent-yellow-600"
             />
             Show Only Missing
           </label>
@@ -907,27 +921,25 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
           if (showOnlyMissing && filteredItems.length === 0) return null;
 
           return (
-            <div key={brother} className={`bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg p-4 shadow-xl ${completion.complete ? 'border-4 border-emerald-500 shadow-emerald-900/50' : 'border-2 border-amber-800'}`}>
+            <div key={brother} className={`bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg p-4 shadow-xl ${completion.complete ? 'border-4 border-emerald-500 shadow-emerald-900/50' : 'border-2 border-amber-800'}`}>
               <div
                 className="flex items-center justify-between mb-3 cursor-pointer"
                 onClick={() => toggleBrother(brother)}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-amber-300">{isExpanded ? '▼' : '▶'}</span>
+                  {isExpanded
+                    ? <ChevronDown className="w-4 h-4 text-stone-300 shrink-0" />
+                    : <ChevronRight className="w-4 h-4 text-stone-300 shrink-0" />
+                  }
                   <h3 className="text-xl font-bold rs-text-gold">{brother}</h3>
                 </div>
-                <span className={`px-3 py-1 rounded text-sm font-bold border-2 ${completion.complete ? 'bg-gradient-to-b from-emerald-600 to-emerald-800 text-white border-emerald-950 shadow-lg' : 'bg-gradient-to-b from-amber-800 to-amber-950 text-amber-200 border-amber-950'}`}>
+                <span className={`px-3 py-1 rounded text-sm font-bold border-2 ${completion.complete ? 'bg-gradient-to-b from-emerald-600 to-emerald-800 text-white border-emerald-950 shadow-lg' : 'bg-gradient-to-b from-amber-800 to-amber-950 text-stone-200 border-amber-950'}`}>
                   {completion.obtained}/{completion.total}
                 </span>
               </div>
 
               {isExpanded && (
                 <>
-                  {!compactView && (
-                    <div className="text-amber-300 text-xs mb-3 font-semibold">
-                      Left-click to add • Shift+click or right-click to remove
-                    </div>
-                  )}
                   {compactView ? (
                     // Compact View - Icons only
                     <div className="flex flex-wrap gap-2">
@@ -977,7 +989,7 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
                           >
                             <img src={item.img} alt={item.name} className="w-10 h-10 object-contain" />
                             <div className="flex-1 text-left min-w-0">
-                              <div className="text-amber-100 text-sm font-bold truncate">{item.name}</div>
+                              <div className="text-stone-100 text-sm font-bold truncate">{item.name}</div>
                               {obtained && <div className="text-emerald-300 text-xs font-semibold">x{count}</div>}
                             </div>
                           </button>
@@ -1102,11 +1114,11 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
 
   const SortIcon = ({ column }) => {
     if (sortConfig.column !== column) {
-      return <span className="text-amber-600 opacity-50 ml-1">⇅</span>;
+      return <ChevronsUpDown className="inline w-3.5 h-3.5 ml-1 opacity-40" />;
     }
     return sortConfig.direction === 'asc'
-      ? <span className="text-yellow-300 ml-1">↑</span>
-      : <span className="text-yellow-300 ml-1">↓</span>;
+      ? <ChevronUp className="inline w-3.5 h-3.5 ml-1 text-yellow-300" />
+      : <ChevronDown className="inline w-3.5 h-3.5 ml-1 text-yellow-300" />;
   };
 
   const sortedData = getSortedData();
@@ -1146,41 +1158,44 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
 
   return (
     <div className="space-y-6">
-      {/* Filter Controls */}
-      <div className="flex justify-end gap-6 flex-wrap">
-        <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showOnlyUniques}
-            onChange={(e) => { setShowOnlyUniques(e.target.checked); localStorage.setItem('rs3-barrows-show-only-uniques', e.target.checked.toString()); }}
-            className="w-4 h-4 accent-amber-500"
-          />
-          Show Only Uniques
-        </label>
-        <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
-          <input
-            type="checkbox"
-            checked={hideUnknownRuns}
-            onChange={(e) => { setHideUnknownRuns(e.target.checked); localStorage.setItem('rs3-barrows-hide-unknown-runs', e.target.checked.toString()); }}
-            className="w-4 h-4 accent-amber-500"
-          />
-          Hide Unknown Runs
-        </label>
-        <label className="flex items-center gap-2 text-amber-200 text-sm font-semibold cursor-pointer">
-          <input
-            type="checkbox"
-            checked={hideCorruptionSigil}
-            onChange={(e) => { setHideCorruptionSigil(e.target.checked); localStorage.setItem('rs3-barrows-hide-corruption', e.target.checked.toString()); }}
-            className="w-4 h-4 accent-amber-500"
-          />
-          Hide Corruption Sigil
-        </label>
+      <div className="flex flex-wrap gap-x-4 gap-y-3 items-center justify-between">
+        <h2 className="text-xl font-bold rs-text-gold">Drop Log</h2>
+        {/* Filter Controls */}
+        <div className="flex flex-wrap gap-x-5 gap-y-2 items-center bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg px-4 py-2 border-2 border-amber-800">
+          <label className="flex items-center gap-2 text-stone-200 text-sm font-semibold cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showOnlyUniques}
+              onChange={(e) => { setShowOnlyUniques(e.target.checked); localStorage.setItem('rs3-barrows-show-only-uniques', e.target.checked.toString()); }}
+              className="w-4 h-4 accent-yellow-600"
+            />
+            Show Only Uniques
+          </label>
+          <label className="flex items-center gap-2 text-stone-200 text-sm font-semibold cursor-pointer">
+            <input
+              type="checkbox"
+              checked={hideUnknownRuns}
+              onChange={(e) => { setHideUnknownRuns(e.target.checked); localStorage.setItem('rs3-barrows-hide-unknown-runs', e.target.checked.toString()); }}
+              className="w-4 h-4 accent-yellow-600"
+            />
+            Hide Unknown Runs
+          </label>
+          <label className="flex items-center gap-2 text-stone-200 text-sm font-semibold cursor-pointer">
+            <input
+              type="checkbox"
+              checked={hideCorruptionSigil}
+              onChange={(e) => { setHideCorruptionSigil(e.target.checked); localStorage.setItem('rs3-barrows-hide-corruption', e.target.checked.toString()); }}
+              className="w-4 h-4 accent-yellow-600"
+            />
+            Hide Corruption Sigil
+          </label>
+        </div>
       </div>
 
       {/* Bulk Action Bar */}
       {selectedDrops.size > 0 && (
         <div className="bg-gradient-to-br from-amber-900 to-amber-950 rounded-lg p-4 border-2 border-amber-700 shadow-xl flex flex-wrap items-center gap-4">
-          <span className="text-amber-100 font-semibold">
+          <span className="text-stone-100 font-semibold">
             {selectedDrops.size} drop{selectedDrops.size !== 1 ? 's' : ''} selected
           </span>
           <div className="flex items-center gap-2">
@@ -1188,12 +1203,12 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
               type="date"
               value={bulkEditDate}
               onChange={(e) => setBulkEditDate(e.target.value)}
-              className="bg-stone-800 text-amber-100 px-3 py-1.5 rounded border-2 border-amber-800"
+              className="bg-stone-800 text-stone-100 px-3 py-1.5 rounded border-2 border-amber-800"
             />
             <button
               onClick={handleBulkDateUpdate}
               disabled={!bulkEditDate}
-              className="bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 disabled:from-stone-600 disabled:to-stone-800 text-white px-3 py-1.5 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
+              className="bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 disabled:from-stone-600 disabled:to-stone-800 text-white px-3 py-1.5 rounded border-2 border-amber-950 shadow-lg font-semibold text-sm"
             >
               Set Date
             </button>
@@ -1206,26 +1221,26 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
           </div>
           <button
             onClick={() => setSelectedDrops(new Set())}
-            className="text-amber-300 hover:text-amber-200 text-sm font-semibold ml-auto"
+            className="text-stone-300 hover:text-stone-200 text-sm font-semibold ml-auto"
           >
             Cancel
           </button>
         </div>
       )}
 
-      <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg overflow-hidden overflow-x-auto border-2 border-amber-900 shadow-xl">
+      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg overflow-x-auto overflow-y-auto max-h-[600px] border-2 border-amber-900 shadow-xl">
         <table className="w-full">
-          <thead className="bg-gradient-to-b from-amber-800 to-amber-950">
-            <tr>
+          <thead className="bg-gradient-to-b from-amber-800 to-amber-950 sticky top-0 z-10">
+            <tr className="border-b-2 border-amber-700">
               <th className="px-2 py-3 text-center">
                 <input
                   type="checkbox"
                   checked={filteredData.length > 0 && filteredData.every(d => selectedDrops.has(d.id))}
                   onChange={() => toggleSelectAll(filteredData)}
-                  className="w-4 h-4 accent-amber-500"
+                  className="w-4 h-4 accent-yellow-600"
                 />
               </th>
-              <th className="px-4 py-3 text-left rs-text-gold font-bold">#</th>
+              <th className="px-4 py-3 text-center rs-text-gold font-bold">#</th>
               <th
                 className="px-4 py-3 text-left rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
                 onClick={() => handleSort('item')}
@@ -1233,13 +1248,13 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
                 Item<SortIcon column="item" />
               </th>
               <th
-                className="px-4 py-3 text-left rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
+                className="px-4 py-3 text-center rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
                 onClick={() => handleSort('killCount')}
               >
                 Run #<SortIcon column="killCount" />
               </th>
               <th
-                className="px-4 py-3 text-left rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
+                className="px-4 py-3 text-center rs-text-gold font-bold cursor-pointer hover:text-yellow-300 select-none"
                 onClick={() => handleSort('dryStreak')}
               >
                 Dry Streak<SortIcon column="dryStreak" />
@@ -1250,27 +1265,27 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
               >
                 Date<SortIcon column="timestamp" />
               </th>
-              <th className="px-4 py-3 text-left rs-text-gold font-bold">Actions</th>
+              <th className="w-10" />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-amber-900/50">
             {filteredData.map((drop, idx) => (
-              <tr key={drop.id} className={`border-t-2 border-amber-900 hover:bg-stone-700 ${selectedDrops.has(drop.id) ? 'bg-amber-900/30' : ''}`}>
+              <tr key={drop.id} className={`group transition-colors duration-150 ${selectedDrops.has(drop.id) ? 'bg-amber-900/30 hover:bg-amber-900/40' : idx % 2 === 1 ? 'bg-stone-800/30 hover:bg-stone-600/40' : 'hover:bg-stone-600/40'}`}>
                 <td className="px-2 py-3 text-center">
                   <input
                     type="checkbox"
                     checked={selectedDrops.has(drop.id)}
                     onChange={() => toggleDropSelection(drop.id)}
-                    className="w-4 h-4 accent-amber-500"
+                    className="w-4 h-4 accent-yellow-600"
                   />
                 </td>
-                <td className="px-4 py-3 text-amber-200 font-semibold">{idx + 1}</td>
-                <td className="px-4 py-3 text-amber-100 font-semibold">
+                <td className="px-4 py-3 text-center text-stone-200 font-semibold">{idx + 1}</td>
+                <td className="px-4 py-3 text-stone-100 font-semibold">
                   {drop.item}
                   {drop.isFirstDrop && <span className="ml-2 text-xs bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold">NEW</span>}
                   {drop.isLinza && <span className="ml-2 text-xs bg-violet-600 text-white px-1.5 py-0.5 rounded font-bold">LINZA</span>}
                 </td>
-                <td className="px-4 py-3 text-amber-100">
+                <td className="px-4 py-3 text-center text-stone-100">
                   {editingCell?.dropId === drop.id && editingCell?.field === 'kc' ? (
                     <input
                       type="number"
@@ -1281,12 +1296,12 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
                         if (e.key === 'Enter') saveEdit(drop);
                         if (e.key === 'Escape') cancelEdit();
                       }}
-                      className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-500 w-20"
+                      className="bg-stone-900 text-stone-100 px-2 py-1 rounded border-2 border-yellow-700 w-20"
                       autoFocus
                     />
                   ) : (
                     <span
-                      className="font-semibold cursor-pointer hover:text-amber-300 hover:underline"
+                      className="font-semibold cursor-pointer hover:text-stone-300 hover:underline"
                       onClick={() => startEdit(drop.id, 'kc', drop.killCount != null ? drop.killCount.toString() : '')}
                       title="Click to edit"
                     >
@@ -1294,8 +1309,8 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-amber-200 font-semibold">{drop.dryStreak ?? '-'}</td>
-                <td className="px-4 py-3 text-amber-200">
+                <td className="px-4 py-3 text-center text-stone-200 font-semibold">{drop.dryStreak ?? '-'}</td>
+                <td className="px-4 py-3 text-stone-200">
                   {editingCell?.dropId === drop.id && editingCell?.field === 'date' ? (
                     <div className="flex gap-1 items-center">
                       <input
@@ -1307,7 +1322,7 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
                           if (e.key === 'Enter') saveEdit(drop);
                           if (e.key === 'Escape') cancelEdit();
                         }}
-                        className="bg-stone-900 text-amber-100 px-2 py-1 rounded border-2 border-amber-500 w-36"
+                        className="bg-stone-900 text-stone-100 px-2 py-1 rounded border-2 border-yellow-700 w-36"
                         autoFocus
                       />
                       <button
@@ -1324,7 +1339,7 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
                     </div>
                   ) : (
                     <span
-                      className="font-semibold cursor-pointer hover:text-amber-300 hover:underline"
+                      className="font-semibold cursor-pointer hover:text-stone-300 hover:underline"
                       onClick={() => startEdit(drop.id, 'date', drop.timestamp ? new Date(drop.timestamp).toLocaleDateString('en-CA') : '')}
                       title="Click to edit"
                     >
@@ -1332,10 +1347,11 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-2 py-3">
                   <button
                     onClick={() => removeDrop(drop.id)}
-                    className="text-red-400 hover:text-red-300"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-red-400 hover:text-red-300"
+                    title="Delete drop"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -1354,16 +1370,16 @@ const DailySummaryTab = ({ dailySummary }) => {
     <div className="space-y-4">
       <h2 className="text-xl font-bold rs-text-gold">Daily Summary</h2>
       {dailySummary.length === 0 ? (
-        <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg border-2 border-amber-900 shadow-xl p-6">
-          <div className="text-amber-300 text-center py-4 font-semibold">
+        <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg border-2 border-amber-900 shadow-xl p-6">
+          <div className="text-stone-300 text-center py-4 font-semibold">
             No drops with timestamps to summarize.
           </div>
         </div>
       ) : (
-        <div className="bg-gradient-to-br from-stone-700 to-stone-800 rounded-lg overflow-hidden overflow-x-auto border-2 border-amber-900 shadow-xl">
+        <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg overflow-x-auto overflow-y-auto max-h-[600px] border-2 border-amber-900 shadow-xl">
           <table className="w-full">
-            <thead className="bg-gradient-to-b from-amber-800 to-amber-950">
-              <tr>
+            <thead className="bg-gradient-to-b from-amber-800 to-amber-950 sticky top-0 z-10">
+              <tr className="border-b-2 border-amber-700">
                 <th className="px-4 py-2 text-left rs-text-gold font-bold">Date</th>
                 <th className="px-4 py-2 text-center rs-text-gold font-bold">Drops</th>
                 <th className="px-4 py-2 text-center rs-text-gold font-bold">Full Runs</th>
@@ -1371,10 +1387,10 @@ const DailySummaryTab = ({ dailySummary }) => {
                 <th className="px-4 py-2 text-center rs-text-gold font-bold">Uniques</th>
               </tr>
             </thead>
-            <tbody>
-              {dailySummary.map((day) => (
-                <tr key={day.date} className="border-t border-amber-900 hover:bg-stone-700">
-                  <td className="px-4 py-2 text-amber-100 font-semibold">
+            <tbody className="divide-y divide-amber-900/50">
+              {dailySummary.map((day, idx) => (
+                <tr key={day.date} className={`transition-colors duration-150 ${idx % 2 === 1 ? 'bg-stone-800/30 hover:bg-stone-600/40' : 'hover:bg-stone-600/40'}`}>
+                  <td className="px-4 py-2 text-stone-100 font-semibold">
                     {new Date(day.date + 'T00:00:00').toLocaleDateString(undefined, {
                       weekday: 'short',
                       year: 'numeric',
@@ -1383,7 +1399,7 @@ const DailySummaryTab = ({ dailySummary }) => {
                     })}
                   </td>
                   <td className="px-4 py-2 text-center text-emerald-400 font-bold">{day.drops}</td>
-                  <td className="px-4 py-2 text-center text-amber-200 font-semibold">{day.fullRuns ?? '-'}</td>
+                  <td className="px-4 py-2 text-center text-stone-200 font-semibold">{day.fullRuns ?? '-'}</td>
                   <td className="px-4 py-2 text-center text-violet-400 font-semibold">{day.linzaRuns ?? '-'}</td>
                   <td className="px-4 py-2 text-center text-yellow-400 font-bold">{day.uniques > 0 ? day.uniques : '-'}</td>
                 </tr>
@@ -1472,19 +1488,19 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
-      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-lg w-full border-4 border-amber-900 rs-border">
+      <div className="bg-gradient-to-br from-stone-900 to-stone-950 rounded-lg shadow-2xl p-6 max-w-lg w-full border-4 border-amber-900 rs-border">
         <h3 className="text-2xl font-bold rs-text-gold mb-4">Add Drop(s)</h3>
         <div className="space-y-4">
 
           {/* Run # and Linza on same row */}
           <div className="flex items-end gap-4">
             <div className="flex-1">
-              <label className="block text-amber-200 mb-1.5 font-semibold text-sm">Obtained at Run #</label>
+              <label className="block text-stone-200 mb-1.5 font-semibold text-sm">Obtained at Run #</label>
               <input
                 type="number"
                 value={dropKC}
                 onChange={(e) => setDropKC(e.target.value)}
-                className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
+                className="w-full bg-stone-900 text-stone-100 px-4 py-2 rounded border-2 border-amber-900"
               />
             </div>
             <label className="flex items-center gap-2 text-violet-200 text-sm font-semibold cursor-pointer pb-2">
@@ -1507,10 +1523,10 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
 
           {/* Searchable combobox */}
           <div className="relative">
-            <label className="block text-amber-200 mb-1.5 font-semibold text-sm">
+            <label className="block text-stone-200 mb-1.5 font-semibold text-sm">
               Add Item
               {selectedItems.length > 0 && (
-                <span className="text-amber-300 ml-2">({selectedItems.length} selected)</span>
+                <span className="text-stone-300 ml-2">({selectedItems.length} selected)</span>
               )}
             </label>
             <input
@@ -1529,7 +1545,7 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
                 }
               }}
               placeholder="Type to search items or brothers..."
-              className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 focus:border-amber-600 outline-none"
+              className="w-full bg-stone-900 text-stone-100 px-4 py-2 rounded border-2 border-amber-900 focus:border-yellow-700 outline-none"
             />
 
             {/* Dropdown list */}
@@ -1539,11 +1555,11 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
                 className="absolute top-full left-0 right-0 mt-1 bg-stone-900 border-2 border-amber-900 rounded shadow-xl z-10 max-h-56 overflow-y-auto"
               >
                 {filteredItems.length === 0 ? (
-                  <div className="text-amber-300 text-center py-4 text-sm">No items found</div>
+                  <div className="text-stone-300 text-center py-4 text-sm">No items found</div>
                 ) : (
                   Object.entries(groupedFilteredItems).map(([brother, items]) => (
                     <div key={brother}>
-                      <div className="px-3 py-1 text-xs font-bold text-amber-500 bg-stone-950 sticky top-0">
+                      <div className="px-3 py-1 text-xs font-bold text-yellow-600 bg-stone-950 sticky top-0">
                         {brother}
                       </div>
                       {items.map(item => {
@@ -1558,7 +1574,7 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
                             }`}
                           >
                             <img src={item.img} alt={item.name} className="w-6 h-6 object-contain flex-shrink-0" />
-                            <span className="text-amber-100 text-sm flex-1">{item.name}</span>
+                            <span className="text-stone-100 text-sm flex-1">{item.name}</span>
                             {isSelected && <span className="text-amber-500 text-xs font-bold">✓</span>}
                           </button>
                         );
@@ -1573,7 +1589,7 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
           {/* Selected item chips */}
           {selectedItems.length > 0 && (
             <div>
-              <label className="block text-amber-200 mb-2 font-semibold text-sm">Selected</label>
+              <label className="block text-stone-200 mb-2 font-semibold text-sm">Selected</label>
               <div className="flex flex-wrap gap-2">
                 {selectedItems.map(itemName => {
                   const img = getItemImg(itemName);
@@ -1583,10 +1599,10 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
                       className="flex items-center gap-2 px-3 py-1.5 rounded bg-gradient-to-b from-amber-700 to-amber-900 border-2 border-amber-950 text-sm"
                     >
                       {img && <img src={img} alt={itemName} className="w-5 h-5 object-contain" />}
-                      <span className="text-amber-100 font-semibold">{itemName}</span>
+                      <span className="text-stone-100 font-semibold">{itemName}</span>
                       <button
                         onClick={() => removeItem(itemName)}
-                        className="text-amber-300 hover:text-red-400 transition-colors ml-1 font-bold leading-none"
+                        className="text-stone-300 hover:text-red-400 transition-colors ml-1 font-bold leading-none"
                       >
                         ×
                       </button>
@@ -1602,7 +1618,7 @@ const AddDropModal = ({ killCount, linzaKillCount, onAdd, onClose }) => {
             <button
               onClick={handleAdd}
               disabled={selectedItems.length === 0}
-              className="flex-1 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 disabled:bg-gradient-to-b disabled:from-stone-700 disabled:to-stone-900 disabled:cursor-not-allowed text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold"
+              className="flex-1 bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 disabled:bg-gradient-to-b disabled:from-stone-700 disabled:to-stone-900 disabled:cursor-not-allowed text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold"
             >
               Add Drop(s)
             </button>
@@ -1751,12 +1767,12 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
   if (showConfirmReplace) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
-        <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-md w-full border-4 border-red-800 rs-border">
+        <div className="bg-gradient-to-br from-stone-900 to-stone-950 rounded-lg shadow-2xl p-6 max-w-md w-full border-4 border-red-800 rs-border">
           <h3 className="text-2xl font-bold text-red-400 mb-4" style={{textShadow: '2px 2px 4px rgba(0, 0, 0, 0.9)'}}>⚠️ Confirm Replace</h3>
-          <p className="text-amber-100 mb-4 font-semibold">
+          <p className="text-stone-100 mb-4 font-semibold">
             This will <strong className="text-red-400">permanently delete</strong> all your current drop history and replace it with the imported data.
           </p>
-          <p className="text-amber-200 mb-6">
+          <p className="text-stone-200 mb-6">
             Are you sure you want to continue?
           </p>
           <div className="flex gap-2">
@@ -1780,7 +1796,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
-      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-3xl w-full border-4 border-amber-900 max-h-[90vh] overflow-y-auto rs-border">
+      <div className="bg-gradient-to-br from-stone-900 to-stone-950 rounded-lg shadow-2xl p-6 max-w-3xl w-full border-4 border-amber-900 max-h-[90vh] overflow-y-auto rs-border">
         <h3 className="text-2xl font-bold rs-text-gold mb-4">Import Drop History</h3>
 
         <div className="space-y-4">
@@ -1791,7 +1807,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
               className={`flex-1 px-4 py-2 rounded font-bold border-2 ${
                 inputMethod === 'paste'
                   ? 'bg-gradient-to-b from-amber-700 to-amber-900 text-white border-amber-950'
-                  : 'bg-gradient-to-b from-stone-700 to-stone-800 text-amber-200 hover:from-stone-600 hover:to-stone-700 border-stone-950'
+                  : 'bg-gradient-to-b from-stone-800 to-stone-900 text-stone-200 hover:from-stone-600 hover:to-stone-700 border-stone-950'
               }`}
             >
               Paste Text
@@ -1801,7 +1817,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
               className={`flex-1 px-4 py-2 rounded font-bold border-2 ${
                 inputMethod === 'upload'
                   ? 'bg-gradient-to-b from-amber-700 to-amber-900 text-white border-amber-950'
-                  : 'bg-gradient-to-b from-stone-700 to-stone-800 text-amber-200 hover:from-stone-600 hover:to-stone-700 border-stone-950'
+                  : 'bg-gradient-to-b from-stone-800 to-stone-900 text-stone-200 hover:from-stone-600 hover:to-stone-700 border-stone-950'
               }`}
             >
               Upload File
@@ -1811,7 +1827,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
           {/* Input Area */}
           {inputMethod === 'paste' ? (
             <div>
-              <label className="block text-amber-200 mb-2 font-semibold">Paste Import Data</label>
+              <label className="block text-stone-200 mb-2 font-semibold">Paste Import Data</label>
               <textarea
                 value={importText}
                 onChange={(e) => {
@@ -1819,17 +1835,17 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
                   setValidationResult(null);
                 }}
                 placeholder="Paste your export data here (format: Run Count | Item | Date)&#10;Example:&#10;1 | Ahrim's staff | 2025-01-15&#10;5 | Dharok's helm | 2025-01-20&#10;- | Karil's crossbow | -"
-                className="w-full h-64 bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 font-mono text-sm"
+                className="w-full h-64 bg-stone-900 text-stone-100 px-4 py-2 rounded border-2 border-amber-900 font-mono text-sm"
               />
             </div>
           ) : (
             <div>
-              <label className="block text-amber-200 mb-2 font-semibold">Upload Text File</label>
+              <label className="block text-stone-200 mb-2 font-semibold">Upload Text File</label>
               <input
                 type="file"
                 accept=".txt"
                 onChange={handleFileUpload}
-                className="w-full bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900"
+                className="w-full bg-stone-900 text-stone-100 px-4 py-2 rounded border-2 border-amber-900"
               />
               {importText && (
                 <div className="mt-2 text-sm text-emerald-400 font-semibold">
@@ -1842,7 +1858,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
           {/* Preview Button */}
           <button
             onClick={handlePreview}
-            className="w-full bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold"
+            className="w-full bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold"
           >
             Preview & Validate
           </button>
@@ -1855,7 +1871,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
                   <div className="text-emerald-400 font-bold mb-2">
                     ✓ Found {validationResult.success.length} valid drop(s)
                   </div>
-                  <div className="text-sm text-amber-200 font-semibold">
+                  <div className="text-sm text-stone-200 font-semibold">
                     Run Range: {Math.min(...validationResult.success.map(d => d.killCount))} - {Math.max(...validationResult.success.map(d => d.killCount))}
                   </div>
                 </div>
@@ -1881,7 +1897,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
           {/* Import Mode Selection */}
           {validationResult && validationResult.success.length > 0 && validationResult.errors.length === 0 && (
             <div className="bg-stone-900 rounded p-4 border-2 border-amber-900">
-              <label className="block text-amber-200 mb-3 font-bold">Import Mode</label>
+              <label className="block text-stone-200 mb-3 font-bold">Import Mode</label>
               <div className="space-y-2">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
@@ -1893,8 +1909,8 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
                     className="mt-1"
                   />
                   <div>
-                    <div className="text-amber-100 font-bold">Merge with existing data</div>
-                    <div className="text-sm text-amber-300">Add imported drops to your current data</div>
+                    <div className="text-stone-100 font-bold">Merge with existing data</div>
+                    <div className="text-sm text-stone-300">Add imported drops to your current data</div>
                   </div>
                 </label>
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -1907,7 +1923,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
                     className="mt-1"
                   />
                   <div>
-                    <div className="text-amber-100 font-bold">Replace all data</div>
+                    <div className="text-stone-100 font-bold">Replace all data</div>
                     <div className="text-sm text-red-400 font-bold">⚠️ This will delete all existing drops!</div>
                   </div>
                 </label>
@@ -1920,7 +1936,7 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
             <button
               onClick={handleImport}
               disabled={!validationResult || validationResult.success.length === 0 || validationResult.errors.length > 0}
-              className="flex-1 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 disabled:bg-gradient-to-b disabled:from-stone-700 disabled:to-stone-900 disabled:cursor-not-allowed text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold"
+              className="flex-1 bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 disabled:bg-gradient-to-b disabled:from-stone-700 disabled:to-stone-900 disabled:cursor-not-allowed text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold"
             >
               Import {validationResult?.success.length || 0} Drop(s)
             </button>
@@ -1991,45 +2007,45 @@ const ExportModal = ({ dropHistory, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
-      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-3xl w-full border-4 border-amber-900 max-h-[90vh] flex flex-col rs-border">
+      <div className="bg-gradient-to-br from-stone-900 to-stone-950 rounded-lg shadow-2xl p-6 max-w-3xl w-full border-4 border-amber-900 max-h-[90vh] flex flex-col rs-border">
         <h3 className="text-2xl font-bold rs-text-gold mb-4">Export Drop History</h3>
 
         {dropHistory.length === 0 ? (
-          <div className="text-amber-300 text-center py-8 font-semibold">
+          <div className="text-stone-300 text-center py-8 font-semibold">
             No drops to export. Add some drops first!
           </div>
         ) : (
           <>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-                <div className="text-amber-200 text-sm font-semibold">Total Entries</div>
+                <div className="text-stone-200 text-sm font-semibold">Total Entries</div>
                 <div className="text-xl font-bold rs-text-gold">{stats.totalEntries}</div>
               </div>
               <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner">
-                <div className="text-amber-200 text-sm font-semibold">Run Range</div>
+                <div className="text-stone-200 text-sm font-semibold">Run Range</div>
                 <div className="text-xl font-bold rs-text-gold">{stats.kcRange}</div>
               </div>
             </div>
 
             <div className="mb-4 flex-1 min-h-0">
-              <label className="block text-amber-200 mb-2 font-semibold">Export Preview</label>
+              <label className="block text-stone-200 mb-2 font-semibold">Export Preview</label>
               <textarea
                 value={exportText}
                 readOnly
-                className="w-full h-64 bg-stone-900 text-amber-100 px-4 py-2 rounded border-2 border-amber-900 font-mono text-sm resize-none"
+                className="w-full h-64 bg-stone-900 text-stone-100 px-4 py-2 rounded border-2 border-amber-900 font-mono text-sm resize-none"
               />
             </div>
 
             <div className="flex gap-2">
               <button
                 onClick={handleCopy}
-                className="flex-1 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold flex items-center justify-center gap-2"
+                className="flex-1 bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold flex items-center justify-center gap-2"
               >
                 {copySuccess ? '✓ Copied!' : 'Copy to Clipboard'}
               </button>
               <button
                 onClick={handleDownload}
-                className="flex-1 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold flex items-center justify-center gap-2"
+                className="flex-1 bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold flex items-center justify-center gap-2"
               >
                 <Download className="w-4 h-4" /> Download File
               </button>
@@ -2058,12 +2074,12 @@ const MigrationModal = ({ onMigrate, onSkip }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
-      <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl p-6 max-w-md w-full border-4 border-amber-900 rs-border">
+      <div className="bg-gradient-to-br from-stone-900 to-stone-950 rounded-lg shadow-2xl p-6 max-w-md w-full border-4 border-amber-900 rs-border">
         <h3 className="text-2xl font-bold rs-text-gold mb-4">Import Local Data?</h3>
-        <p className="text-amber-200 mb-4">
+        <p className="text-stone-200 mb-4">
           We found existing drop data saved on this device. Would you like to import it to your account?
         </p>
-        <p className="text-amber-300 text-sm mb-6">
+        <p className="text-stone-300 text-sm mb-6">
           This will merge your local data with your cloud account, allowing you to access it from any device.
         </p>
         <div className="flex gap-2">
@@ -2095,13 +2111,13 @@ const ToastContainer = ({ toasts, onDismiss, onUndo }) => {
       {toasts.map(toast => (
         <div
           key={toast.id}
-          className="bg-gradient-to-br from-stone-800 to-stone-900 border-2 border-amber-800 rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3 animate-fade-in"
+          className="bg-gradient-to-br from-stone-900 to-stone-950 border-2 border-amber-800 rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3 animate-fade-in"
         >
-          <span className="text-amber-100 text-sm font-semibold flex-1">{toast.message}</span>
+          <span className="text-stone-100 text-sm font-semibold flex-1">{toast.message}</span>
           {toast.undoAction && (
             <button
               onClick={() => onUndo(toast)}
-              className="text-amber-400 hover:text-amber-300 text-sm font-bold underline whitespace-nowrap"
+              className="text-yellow-500 hover:text-yellow-400 text-sm font-bold underline whitespace-nowrap"
             >
               Undo
             </button>
