@@ -170,7 +170,7 @@ export const barrowsApi = {
   },
 
   // Add a single run
-  async addRun(userId, trackerId, timestamp, isLinza = false) {
+  async addRun(userId, trackerId, timestamp, isLinza = false, killCount = null) {
     const { data, error } = await supabase
       .from('run_history')
       .insert({
@@ -178,6 +178,7 @@ export const barrowsApi = {
         tracker_id: trackerId,
         timestamp: timestamp,
         is_linza: isLinza,
+        kill_count: killCount,
       })
       .select()
       .single();
@@ -193,6 +194,7 @@ export const barrowsApi = {
       tracker_id: trackerId,
       timestamp: run.timestamp,
       is_linza: run.isLinza || false,
+      kill_count: run.killCount ?? null,
     }));
 
     const { data, error } = await supabase

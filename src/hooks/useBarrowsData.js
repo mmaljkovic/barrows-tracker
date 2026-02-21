@@ -83,6 +83,7 @@ export const useBarrowsData = () => {
     id: entry.id,
     timestamp: entry.timestamp,
     isLinza: entry.is_linza || false,
+    killCount: entry.kill_count ?? null,
   }), []);
 
   // Load from Supabase
@@ -141,7 +142,7 @@ export const useBarrowsData = () => {
   const incrementKC = useCallback(async () => {
     const newKC = killCount + 1;
     const timestamp = new Date().toISOString();
-    const newRun = { id: Date.now() + Math.random(), timestamp };
+    const newRun = { id: Date.now() + Math.random(), timestamp, killCount: newKC };
 
     setKillCount(newKC);
     setRunHistory(prev => [...prev, newRun]);
@@ -151,9 +152,9 @@ export const useBarrowsData = () => {
         await barrowsApi.updateKillCount(trackerId, newKC);
         // Also record the run with timestamp
         try {
-          const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp);
+          const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp, false, newKC);
           // Update with real ID from server
-          setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp } : r));
+          setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, killCount: savedRun.kill_count } : r));
         } catch (runErr) {
           console.warn('Could not save run to database:', runErr.message);
           // Run history table might not exist, continue with local tracking
@@ -173,7 +174,7 @@ export const useBarrowsData = () => {
   const incrementLinzaKC = useCallback(async () => {
     const newKC = linzaKillCount + 1;
     const timestamp = new Date().toISOString();
-    const newRun = { id: Date.now() + Math.random(), timestamp, isLinza: true };
+    const newRun = { id: Date.now() + Math.random(), timestamp, isLinza: true, killCount: newKC };
 
     setLinzaKillCount(newKC);
     setRunHistory(prev => [...prev, newRun]);
@@ -182,8 +183,8 @@ export const useBarrowsData = () => {
       try {
         await barrowsApi.updateLinzaKillCount(trackerId, newKC);
         try {
-          const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp, true);
-          setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, isLinza: true } : r));
+          const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp, true, newKC);
+          setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, isLinza: true, killCount: savedRun.kill_count } : r));
         } catch (runErr) {
           console.warn('Could not save Linza run to database:', runErr.message);
         }
