@@ -65,6 +65,17 @@ const BARROWS_DATA = {
   ]
 };
 
+// Converts a timestamp string to a local YYYY-MM-DD date key.
+// Uses local date components instead of toLocaleDateString('en-CA') to
+// guarantee YYYY-MM-DD format regardless of browser locale settings.
+const localDateKey = (ts) => {
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 const BarrowsTracker = () => {
   // Auth state
   const { user, loading: authLoading, isConfigured } = useAuth();
@@ -94,6 +105,7 @@ const BarrowsTracker = () => {
     migrateLocalDataToSupabase,
     estimateRunsFromDrops,
     bulkAddRuns,
+    deleteRun,
   } = useBarrowsData();
 
   // UI state
@@ -261,7 +273,7 @@ const BarrowsTracker = () => {
     return { uniquesObtained, totalDrops, dropsWithDryStreak, currentDryStreak, lastKnownDrop };
   };
 
-  const calculateDailySummary = (dropsWithDryStreak, runHistoryData, fullKC, linzaKC) => {
+  const calculateDailySummary = (dropsWithDryStreak, runHistoryData) => {
     // Deduplicate runs by ID to prevent inflated counts from duplicate entries
     const uniqueRuns = Array.from(new Map(runHistoryData.map(r => [r.id, r])).values());
 
@@ -269,7 +281,7 @@ const BarrowsTracker = () => {
     const runsByDate = {};
     uniqueRuns.forEach(run => {
       if (!run.timestamp) return;
-      const date = new Date(run.timestamp).toLocaleDateString('en-CA');
+      const date = localDateKey(run.timestamp);
       if (!runsByDate[date]) runsByDate[date] = { full: 0, linza: 0 };
       if (run.isLinza) {
         runsByDate[date].linza++;
@@ -282,7 +294,7 @@ const BarrowsTracker = () => {
     const dropsByDate = {};
     dropsWithDryStreak.forEach(drop => {
       if (!drop.timestamp) return;
-      const date = new Date(drop.timestamp).toLocaleDateString('en-CA');
+      const date = localDateKey(drop.timestamp);
       if (!dropsByDate[date]) {
         dropsByDate[date] = { drops: [], uniques: 0 };
       }
@@ -296,20 +308,14 @@ const BarrowsTracker = () => {
     const allDates = new Set([...Object.keys(runsByDate), ...Object.keys(dropsByDate)]);
     const sortedDates = Array.from(allDates).sort();
 
-    // Build summaries chronologically, tracking cumulative full and linza counts separately
+    // Build summaries chronologically using run_history counts for every date uniformly
     let cumulativeRuns = 0;
-    let cumulativeFullRuns = 0;
-    let cumulativeLinzaRuns = 0;
     const summaries = sortedDates.map(date => {
       const dayDrops = dropsByDate[date] || { drops: [], uniques: 0 };
       const dayRuns = runsByDate[date] || { full: 0, linza: 0 };
       const totalRuns = dayRuns.full + dayRuns.linza;
       const startingRun = totalRuns > 0 ? cumulativeRuns + 1 : null;
-      const fullRunsBefore = cumulativeFullRuns;
-      const linzaRunsBefore = cumulativeLinzaRuns;
       cumulativeRuns += totalRuns;
-      cumulativeFullRuns += dayRuns.full;
-      cumulativeLinzaRuns += dayRuns.linza;
 
       return {
         date,
@@ -318,28 +324,7 @@ const BarrowsTracker = () => {
         linzaRuns: dayRuns.linza > 0 ? dayRuns.linza : null,
         uniques: dayDrops.uniques,
         startingRun,
-        _fullRunsBefore: fullRunsBefore,
-        _linzaRunsBefore: linzaRunsBefore,
       };
-    });
-
-    // For the most recent day with runs, anchor to the authoritative stored KC values.
-    // This corrects any duplicates that slipped through the ID deduplication above,
-    // using: runs for day = current KC - runs before this day.
-    if (fullKC != null && linzaKC != null) {
-      const lastWithRuns = [...summaries].reverse().find(d => d.startingRun != null);
-      if (lastWithRuns) {
-        const correctedFull = fullKC - lastWithRuns._fullRunsBefore;
-        const correctedLinza = linzaKC - lastWithRuns._linzaRunsBefore;
-        if (correctedFull >= 0) lastWithRuns.fullRuns = correctedFull > 0 ? correctedFull : null;
-        if (correctedLinza >= 0) lastWithRuns.linzaRuns = correctedLinza > 0 ? correctedLinza : null;
-      }
-    }
-
-    // Remove internal tracking fields before returning
-    summaries.forEach(d => {
-      delete d._fullRunsBefore;
-      delete d._linzaRunsBefore;
     });
 
     return summaries.reverse(); // Newest first
@@ -650,7 +635,9 @@ const BarrowsTracker = () => {
               )}
               {activeTab === 'daily' && (
                 <DailySummaryTab
-                  dailySummary={calculateDailySummary(stats.dropsWithDryStreak, runHistory, killCount, linzaKillCount)}
+                  dailySummary={calculateDailySummary(stats.dropsWithDryStreak, runHistory)}
+                  runHistory={runHistory}
+                  onDeleteRun={deleteRun}
                 />
               )}
               {activeTab === 'settings' && (
@@ -1376,7 +1363,7 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
                   ) : (
                     <span
                       className="font-semibold cursor-pointer hover:text-stone-300 hover:underline"
-                      onClick={() => startEdit(drop.id, 'date', drop.timestamp ? new Date(drop.timestamp).toLocaleDateString('en-CA') : '')}
+                      onClick={() => startEdit(drop.id, 'date', drop.timestamp ? localDateKey(drop.timestamp) : '')}
                       title="Click to edit"
                     >
                       {drop.timestamp ? new Date(drop.timestamp).toLocaleDateString() : '-'}
@@ -1401,7 +1388,24 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
   );
 };
 
-const DailySummaryTab = ({ dailySummary }) => {
+const DailySummaryTab = ({ dailySummary, runHistory, onDeleteRun }) => {
+  const [expandedDates, setExpandedDates] = useState(new Set());
+
+  const toggleExpand = (date) => {
+    setExpandedDates(prev => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
+
+  const getRunsForDate = (date) => {
+    return (runHistory || [])
+      .filter(r => r.timestamp && localDateKey(r.timestamp) === date)
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold rs-text-gold">Daily Summary</h2>
@@ -1416,6 +1420,7 @@ const DailySummaryTab = ({ dailySummary }) => {
           <table className="w-full">
             <thead className="bg-gradient-to-b from-amber-800 to-amber-950 sticky top-0 z-10">
               <tr className="border-b-2 border-amber-700">
+                <th className="w-8"></th>
                 <th className="px-4 py-2 text-left rs-text-gold font-bold">Date</th>
                 <th className="px-4 py-2 text-center rs-text-gold font-bold">Starting Run #</th>
                 <th className="px-4 py-2 text-center rs-text-gold font-bold">Drops</th>
@@ -1425,23 +1430,76 @@ const DailySummaryTab = ({ dailySummary }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-amber-900/50">
-              {dailySummary.map((day, idx) => (
-                <tr key={day.date} className={`transition-colors duration-150 ${idx % 2 === 1 ? 'bg-stone-800/30 hover:bg-stone-600/40' : 'hover:bg-stone-600/40'}`}>
-                  <td className="px-4 py-2 text-stone-100 font-semibold">
-                    {new Date(day.date + 'T00:00:00').toLocaleDateString(undefined, {
-                      weekday: 'short',
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric'
-                    })}
-                  </td>
-                  <td className="px-4 py-2 text-center text-stone-400 font-semibold">{day.startingRun ?? '-'}</td>
-                  <td className="px-4 py-2 text-center text-emerald-400 font-bold">{day.drops}</td>
-                  <td className="px-4 py-2 text-center text-stone-200 font-semibold">{day.fullRuns ?? '-'}</td>
-                  <td className="px-4 py-2 text-center text-violet-400 font-semibold">{day.linzaRuns ?? '-'}</td>
-                  <td className="px-4 py-2 text-center text-yellow-400 font-bold">{day.uniques > 0 ? day.uniques : '-'}</td>
-                </tr>
-              ))}
+              {dailySummary.map((day, idx) => {
+                const isExpanded = expandedDates.has(day.date);
+                const runsForDate = getRunsForDate(day.date);
+                return (
+                  <React.Fragment key={day.date}>
+                    <tr className={`transition-colors duration-150 ${idx % 2 === 1 ? 'bg-stone-800/30 hover:bg-stone-600/40' : 'hover:bg-stone-600/40'}`}>
+                      <td className="pl-2">
+                        <button
+                          onClick={() => toggleExpand(day.date)}
+                          className="text-stone-500 hover:text-stone-200 transition-colors p-1"
+                          title="Manage individual run entries"
+                        >
+                          {isExpanded
+                            ? <ChevronDown className="w-3.5 h-3.5" />
+                            : <ChevronRight className="w-3.5 h-3.5" />
+                          }
+                        </button>
+                      </td>
+                      <td className="px-4 py-2 text-stone-100 font-semibold">
+                        {new Date(day.date + 'T00:00:00').toLocaleDateString(undefined, {
+                          weekday: 'short',
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                      </td>
+                      <td className="px-4 py-2 text-center text-stone-400 font-semibold">{day.startingRun ?? '-'}</td>
+                      <td className="px-4 py-2 text-center text-emerald-400 font-bold">{day.drops}</td>
+                      <td className="px-4 py-2 text-center text-stone-200 font-semibold">{day.fullRuns ?? '-'}</td>
+                      <td className="px-4 py-2 text-center text-violet-400 font-semibold">{day.linzaRuns ?? '-'}</td>
+                      <td className="px-4 py-2 text-center text-yellow-400 font-bold">{day.uniques > 0 ? day.uniques : '-'}</td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="bg-stone-950/60 border-t border-amber-900/30">
+                        <td colSpan={7} className="px-8 py-3">
+                          {runsForDate.length === 0 ? (
+                            <p className="text-stone-500 text-sm italic">No timestamped run entries for this date.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <p className="text-stone-500 text-xs font-semibold uppercase tracking-wide mb-2">
+                                {runsForDate.length} run {runsForDate.length === 1 ? 'entry' : 'entries'} — delete duplicates below
+                              </p>
+                              {runsForDate.map(run => (
+                                <div key={run.id} className="flex items-center gap-3 bg-stone-800 border border-stone-700 rounded px-3 py-1.5 group">
+                                  <span className={`w-12 font-semibold text-xs shrink-0 ${run.isLinza ? 'text-violet-400' : 'text-stone-300'}`}>
+                                    {run.isLinza ? 'Linza' : 'Full'}
+                                  </span>
+                                  <span className="text-stone-400 text-xs w-20 shrink-0">
+                                    {run.killCount != null ? `Run #${run.killCount}` : 'No KC'}
+                                  </span>
+                                  <span className="text-stone-500 text-xs">
+                                    {new Date(run.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                  <button
+                                    onClick={() => onDeleteRun(run.id)}
+                                    className="text-stone-600 hover:text-red-400 transition-colors ml-auto shrink-0"
+                                    title="Delete this run entry"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -2023,7 +2081,7 @@ const ExportModal = ({ dropHistory, onClose }) => {
   };
 
   const handleDownload = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateKey(new Date());
     const filename = `barrows-drops-${today}.txt`;
     const blob = new Blob([exportText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);

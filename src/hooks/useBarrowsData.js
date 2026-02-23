@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { barrowsApi } from '../lib/supabaseApi';
 
@@ -23,6 +23,7 @@ export const useBarrowsData = () => {
   const [error, setError] = useState(null);
   const [trackerId, setTrackerId] = useState(null);
   const [hasLocalData, setHasLocalData] = useState(false);
+  const runInFlight = useRef(false);
 
   // Compute drops object from history array
   const computeDropsFromHistory = useCallback((history) => {
@@ -140,6 +141,9 @@ export const useBarrowsData = () => {
 
   // Increment kill count
   const incrementKC = useCallback(async () => {
+    if (runInFlight.current) return;
+    runInFlight.current = true;
+
     const newKC = killCount + 1;
     const timestamp = new Date().toISOString();
     const newRun = { id: Date.now() + Math.random(), timestamp, killCount: newKC };
@@ -147,31 +151,38 @@ export const useBarrowsData = () => {
     setKillCount(newKC);
     setRunHistory(prev => [...prev, newRun]);
 
-    if (isConfigured && user && trackerId) {
-      try {
-        await barrowsApi.updateKillCount(trackerId, newKC);
-        // Also record the run with timestamp
+    try {
+      if (isConfigured && user && trackerId) {
         try {
-          const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp, false, newKC);
-          // Update with real ID from server
-          setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, killCount: savedRun.kill_count } : r));
-        } catch (runErr) {
-          console.warn('Could not save run to database:', runErr.message);
-          // Run history table might not exist, continue with local tracking
+          await barrowsApi.updateKillCount(trackerId, newKC);
+          // Also record the run with timestamp
+          try {
+            const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp, false, newKC);
+            // Update with real ID from server
+            setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, killCount: savedRun.kill_count } : r));
+          } catch (runErr) {
+            console.warn('Could not save run to database:', runErr.message);
+            // Run history table might not exist, continue with local tracking
+          }
+        } catch (err) {
+          console.error('Error updating KC:', err);
+          setKillCount(prev => prev - 1); // Rollback
+          setRunHistory(prev => prev.filter(r => r.id !== newRun.id)); // Rollback run
+          setError(err.message);
         }
-      } catch (err) {
-        console.error('Error updating KC:', err);
-        setKillCount(killCount); // Rollback
-        setRunHistory(prev => prev.filter(r => r.id !== newRun.id)); // Rollback run
-        setError(err.message);
+      } else {
+        saveToLocalStorage(newKC, drops, dropHistory, [...runHistory, newRun]);
       }
-    } else {
-      saveToLocalStorage(newKC, drops, dropHistory, [...runHistory, newRun]);
+    } finally {
+      runInFlight.current = false;
     }
   }, [killCount, isConfigured, user, trackerId, drops, dropHistory, runHistory, saveToLocalStorage]);
 
   // Increment Linza kill count
   const incrementLinzaKC = useCallback(async () => {
+    if (runInFlight.current) return;
+    runInFlight.current = true;
+
     const newKC = linzaKillCount + 1;
     const timestamp = new Date().toISOString();
     const newRun = { id: Date.now() + Math.random(), timestamp, isLinza: true, killCount: newKC };
@@ -179,23 +190,27 @@ export const useBarrowsData = () => {
     setLinzaKillCount(newKC);
     setRunHistory(prev => [...prev, newRun]);
 
-    if (isConfigured && user && trackerId) {
-      try {
-        await barrowsApi.updateLinzaKillCount(trackerId, newKC);
+    try {
+      if (isConfigured && user && trackerId) {
         try {
-          const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp, true, newKC);
-          setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, isLinza: true, killCount: savedRun.kill_count } : r));
-        } catch (runErr) {
-          console.warn('Could not save Linza run to database:', runErr.message);
+          await barrowsApi.updateLinzaKillCount(trackerId, newKC);
+          try {
+            const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp, true, newKC);
+            setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, isLinza: true, killCount: savedRun.kill_count } : r));
+          } catch (runErr) {
+            console.warn('Could not save Linza run to database:', runErr.message);
+          }
+        } catch (err) {
+          console.error('Error updating Linza KC:', err);
+          setLinzaKillCount(prev => prev - 1); // Rollback
+          setRunHistory(prev => prev.filter(r => r.id !== newRun.id));
+          setError(err.message);
         }
-      } catch (err) {
-        console.error('Error updating Linza KC:', err);
-        setLinzaKillCount(linzaKillCount); // Rollback
-        setRunHistory(prev => prev.filter(r => r.id !== newRun.id));
-        setError(err.message);
+      } else {
+        saveToLocalStorage(killCount, drops, dropHistory, [...runHistory, newRun], newKC);
       }
-    } else {
-      saveToLocalStorage(killCount, drops, dropHistory, [...runHistory, newRun], newKC);
+    } finally {
+      runInFlight.current = false;
     }
   }, [linzaKillCount, killCount, isConfigured, user, trackerId, drops, dropHistory, runHistory, saveToLocalStorage]);
 
@@ -243,6 +258,24 @@ export const useBarrowsData = () => {
       );
     }
   }, [killCount, linzaKillCount, runHistory, isConfigured, user, trackerId, drops, dropHistory, saveToLocalStorage]);
+
+  // Delete a specific run entry by ID (does not change kill count total)
+  const deleteRun = useCallback(async (runId) => {
+    const updatedRuns = runHistory.filter(r => r.id !== runId);
+    setRunHistory(updatedRuns);
+
+    if (isConfigured && user) {
+      try {
+        await barrowsApi.removeRun(runId);
+      } catch (err) {
+        console.error('Error deleting run:', err);
+        setRunHistory(runHistory); // Rollback
+        setError(err.message);
+      }
+    } else {
+      saveToLocalStorage(killCount, drops, dropHistory, updatedRuns);
+    }
+  }, [runHistory, isConfigured, user, killCount, drops, dropHistory, saveToLocalStorage]);
 
   // Set kill count manually
   const setKCManual = useCallback(async (newKC) => {
@@ -360,8 +393,6 @@ export const useBarrowsData = () => {
 
   // Merge imported data
   const mergeImportedData = useCallback(async (parsedEntries) => {
-    const timestamp = new Date().toISOString();
-
     // Optimistic update
     const newHistory = [...dropHistory];
     const newDrops = { ...drops };
@@ -382,7 +413,7 @@ export const useBarrowsData = () => {
 
     if (isConfigured && user && trackerId) {
       try {
-        const addedDrops = await barrowsApi.bulkImportDrops(user.id, trackerId, parsedEntries);
+        await barrowsApi.bulkImportDrops(user.id, trackerId, parsedEntries);
         // Reload to get real IDs
         await loadFromSupabase();
       } catch (err) {
@@ -482,7 +513,8 @@ export const useBarrowsData = () => {
     const dropsByDate = {};
     dropHistory.forEach(drop => {
       if (!drop.timestamp || drop.killCount == null) return;
-      const date = new Date(drop.timestamp).toLocaleDateString('en-CA');
+      const d = new Date(drop.timestamp);
+      const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       if (!dropsByDate[date]) {
         dropsByDate[date] = { minKC: Infinity, maxKC: -Infinity };
       }
@@ -587,6 +619,7 @@ export const useBarrowsData = () => {
     migrateLocalDataToSupabase,
     estimateRunsFromDrops,
     bulkAddRuns,
+    deleteRun,
     clearError,
     reload: isConfigured && user ? loadFromSupabase : loadFromLocalStorage,
   };
