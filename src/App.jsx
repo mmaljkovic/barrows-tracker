@@ -273,7 +273,9 @@ const BarrowsTracker = () => {
     return { uniquesObtained, totalDrops, dropsWithDryStreak, currentDryStreak, lastKnownDrop };
   };
 
-  const calculateDailySummary = (dropsWithDryStreak, runHistoryData) => {
+  const calculateDailySummary = (dropsWithDryStreak, runHistoryData, fullKC, linzaKC) => {
+    const todayKey = localDateKey(new Date());
+
     // Deduplicate runs by ID to prevent inflated counts from duplicate entries
     const uniqueRuns = Array.from(new Map(runHistoryData.map(r => [r.id, r])).values());
 
@@ -304,24 +306,51 @@ const BarrowsTracker = () => {
       }
     });
 
-    // Combine all dates from both runs and drops
+    // Derive today's run counts from the authoritative kill_count totals minus all
+    // past run_history entries. This correctly accounts for runs added via Set Run Count
+    // or any method that didn't write a run_history row.
+    const pastFullRuns = Object.entries(runsByDate)
+      .filter(([d]) => d < todayKey)
+      .reduce((sum, [, c]) => sum + c.full, 0);
+    const pastLinzaRuns = Object.entries(runsByDate)
+      .filter(([d]) => d < todayKey)
+      .reduce((sum, [, c]) => sum + c.linza, 0);
+    const todayDerivedFull = Math.max(0, fullKC - pastFullRuns);
+    const todayDerivedLinza = Math.max(0, linzaKC - pastLinzaRuns);
+
+    // Include today if it has drops or any derived runs
     const allDates = new Set([...Object.keys(runsByDate), ...Object.keys(dropsByDate)]);
+    if (todayDerivedFull > 0 || todayDerivedLinza > 0 || dropsByDate[todayKey]) {
+      allDates.add(todayKey);
+    }
     const sortedDates = Array.from(allDates).sort();
 
-    // Build summaries chronologically using run_history counts for every date uniformly
+    // Build summaries chronologically.
+    // Past dates use run_history counts directly.
+    // Today uses kill_count-derived values so it's always accurate.
     let cumulativeRuns = 0;
     const summaries = sortedDates.map(date => {
       const dayDrops = dropsByDate[date] || { drops: [], uniques: 0 };
-      const dayRuns = runsByDate[date] || { full: 0, linza: 0 };
-      const totalRuns = dayRuns.full + dayRuns.linza;
+
+      let fullRuns, linzaRuns;
+      if (date === todayKey) {
+        fullRuns = todayDerivedFull;
+        linzaRuns = todayDerivedLinza;
+      } else {
+        const dayRuns = runsByDate[date] || { full: 0, linza: 0 };
+        fullRuns = dayRuns.full;
+        linzaRuns = dayRuns.linza;
+      }
+
+      const totalRuns = fullRuns + linzaRuns;
       const startingRun = totalRuns > 0 ? cumulativeRuns + 1 : null;
       cumulativeRuns += totalRuns;
 
       return {
         date,
         drops: dayDrops.drops.length,
-        fullRuns: dayRuns.full > 0 ? dayRuns.full : null,
-        linzaRuns: dayRuns.linza > 0 ? dayRuns.linza : null,
+        fullRuns: fullRuns > 0 ? fullRuns : null,
+        linzaRuns: linzaRuns > 0 ? linzaRuns : null,
         uniques: dayDrops.uniques,
         startingRun,
       };
@@ -635,7 +664,7 @@ const BarrowsTracker = () => {
               )}
               {activeTab === 'daily' && (
                 <DailySummaryTab
-                  dailySummary={calculateDailySummary(stats.dropsWithDryStreak, runHistory)}
+                  dailySummary={calculateDailySummary(stats.dropsWithDryStreak, runHistory, killCount, linzaKillCount)}
                   runHistory={runHistory}
                   onDeleteRun={deleteRun}
                 />
