@@ -68,8 +68,17 @@ const BARROWS_DATA = {
 // Converts a timestamp string to a local YYYY-MM-DD date key.
 // Uses local date components instead of toLocaleDateString('en-CA') to
 // guarantee YYYY-MM-DD format regardless of browser locale settings.
+// Timestamps without timezone info (e.g. from Supabase timestamp-without-tz columns)
+// are treated as UTC to match how they were originally stored via toISOString().
 const localDateKey = (ts) => {
-  const d = new Date(ts);
+  let d;
+  if (ts instanceof Date) {
+    d = ts;
+  } else {
+    const str = String(ts).replace(' ', 'T'); // normalise PostgreSQL space separator
+    const hasTimezone = str.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(str);
+    d = hasTimezone ? new Date(str) : new Date(str + 'Z');
+  }
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -306,17 +315,26 @@ const BarrowsTracker = () => {
       }
     });
 
-    // Derive today's run counts from the authoritative kill_count totals minus all
-    // past run_history entries. This correctly accounts for runs added via Set Run Count
-    // or any method that didn't write a run_history row.
-    const pastFullRuns = Object.entries(runsByDate)
-      .filter(([d]) => d < todayKey)
-      .reduce((sum, [, c]) => sum + c.full, 0);
-    const pastLinzaRuns = Object.entries(runsByDate)
-      .filter(([d]) => d < todayKey)
-      .reduce((sum, [, c]) => sum + c.linza, 0);
-    const todayDerivedFull = Math.max(0, fullKC - pastFullRuns);
-    const todayDerivedLinza = Math.max(0, linzaKC - pastLinzaRuns);
+    // Only derive today's run count from kill_count totals when today already has
+    // tracked activity (drops or run_history entries). Without this guard, any runs
+    // that were never written to run_history (network failures, old pre-history KC, etc.)
+    // would all appear as phantom runs today instead of the day they were actually done.
+    const todayHasActivity = !!(runsByDate[todayKey] || dropsByDate[todayKey]);
+    let todayDerivedFull = runsByDate[todayKey]?.full ?? 0;
+    let todayDerivedLinza = runsByDate[todayKey]?.linza ?? 0;
+
+    if (todayHasActivity) {
+      const pastFullRuns = Object.entries(runsByDate)
+        .filter(([d]) => d < todayKey)
+        .reduce((sum, [, c]) => sum + c.full, 0);
+      const pastLinzaRuns = Object.entries(runsByDate)
+        .filter(([d]) => d < todayKey)
+        .reduce((sum, [, c]) => sum + c.linza, 0);
+      // Take the higher of history count and KC-derived count so Set Run Count
+      // additions are reflected when there's already real activity today.
+      todayDerivedFull = Math.max(todayDerivedFull, fullKC - pastFullRuns);
+      todayDerivedLinza = Math.max(todayDerivedLinza, linzaKC - pastLinzaRuns);
+    }
 
     // Include today if it has drops or any derived runs
     const allDates = new Set([...Object.keys(runsByDate), ...Object.keys(dropsByDate)]);
