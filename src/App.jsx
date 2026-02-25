@@ -282,9 +282,7 @@ const BarrowsTracker = () => {
     return { uniquesObtained, totalDrops, dropsWithDryStreak, currentDryStreak, lastKnownDrop };
   };
 
-  const calculateDailySummary = (dropsWithDryStreak, runHistoryData, fullKC, linzaKC) => {
-    const todayKey = localDateKey(new Date());
-
+  const calculateDailySummary = (dropsWithDryStreak, runHistoryData) => {
     // Deduplicate runs by ID to prevent inflated counts from duplicate entries
     const uniqueRuns = Array.from(new Map(runHistoryData.map(r => [r.id, r])).values());
 
@@ -315,50 +313,15 @@ const BarrowsTracker = () => {
       }
     });
 
-    // Only derive today's run count from kill_count totals when today already has
-    // tracked activity (drops or run_history entries). Without this guard, any runs
-    // that were never written to run_history (network failures, old pre-history KC, etc.)
-    // would all appear as phantom runs today instead of the day they were actually done.
-    const todayHasActivity = !!(runsByDate[todayKey] || dropsByDate[todayKey]);
-    let todayDerivedFull = runsByDate[todayKey]?.full ?? 0;
-    let todayDerivedLinza = runsByDate[todayKey]?.linza ?? 0;
+    // Only show dates where at least 1 run happened (sourced purely from run_history)
+    const sortedDates = Object.keys(runsByDate).sort();
 
-    if (todayHasActivity) {
-      const pastFullRuns = Object.entries(runsByDate)
-        .filter(([d]) => d < todayKey)
-        .reduce((sum, [, c]) => sum + c.full, 0);
-      const pastLinzaRuns = Object.entries(runsByDate)
-        .filter(([d]) => d < todayKey)
-        .reduce((sum, [, c]) => sum + c.linza, 0);
-      // Take the higher of history count and KC-derived count so Set Run Count
-      // additions are reflected when there's already real activity today.
-      todayDerivedFull = Math.max(todayDerivedFull, fullKC - pastFullRuns);
-      todayDerivedLinza = Math.max(todayDerivedLinza, linzaKC - pastLinzaRuns);
-    }
-
-    // Include today if it has drops or any derived runs
-    const allDates = new Set([...Object.keys(runsByDate), ...Object.keys(dropsByDate)]);
-    if (todayDerivedFull > 0 || todayDerivedLinza > 0 || dropsByDate[todayKey]) {
-      allDates.add(todayKey);
-    }
-    const sortedDates = Array.from(allDates).sort();
-
-    // Build summaries chronologically.
-    // Past dates use run_history counts directly.
-    // Today uses kill_count-derived values so it's always accurate.
     let cumulativeRuns = 0;
     const summaries = sortedDates.map(date => {
       const dayDrops = dropsByDate[date] || { drops: [], uniques: 0 };
-
-      let fullRuns, linzaRuns;
-      if (date === todayKey) {
-        fullRuns = todayDerivedFull;
-        linzaRuns = todayDerivedLinza;
-      } else {
-        const dayRuns = runsByDate[date] || { full: 0, linza: 0 };
-        fullRuns = dayRuns.full;
-        linzaRuns = dayRuns.linza;
-      }
+      const dayRuns = runsByDate[date];
+      const fullRuns = dayRuns.full;
+      const linzaRuns = dayRuns.linza;
 
       const totalRuns = fullRuns + linzaRuns;
       const startingRun = totalRuns > 0 ? cumulativeRuns + 1 : null;
@@ -682,7 +645,7 @@ const BarrowsTracker = () => {
               )}
               {activeTab === 'daily' && (
                 <DailySummaryTab
-                  dailySummary={calculateDailySummary(stats.dropsWithDryStreak, runHistory, killCount, linzaKillCount)}
+                  dailySummary={calculateDailySummary(stats.dropsWithDryStreak, runHistory)}
                   runHistory={runHistory}
                   onDeleteRun={deleteRun}
                 />
