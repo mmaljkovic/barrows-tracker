@@ -70,12 +70,18 @@ const BARROWS_DATA = {
 // guarantee YYYY-MM-DD format regardless of browser locale settings.
 // Timestamps without timezone info (e.g. from Supabase timestamp-without-tz columns)
 // are treated as UTC to match how they were originally stored via toISOString().
+// PostgreSQL/PostgREST sometimes returns timezone offsets as "+00" (without the colon
+// and minutes), e.g. "2026-02-22 01:30:00+00". The regex below normalises these to
+// "+00:00" so JS Date can parse them correctly — without this, the offset is undetected,
+// "Z" gets appended producing an invalid string, and getFullYear() returns NaN.
 const localDateKey = (ts) => {
   let d;
   if (ts instanceof Date) {
     d = ts;
   } else {
-    const str = String(ts).replace(' ', 'T'); // normalise PostgreSQL space separator
+    // Normalise PostgreSQL space separator and short timezone offsets (+HH → +HH:00)
+    let str = String(ts).replace(' ', 'T');
+    str = str.replace(/([+-]\d{2})$/, '$1:00');
     const hasTimezone = str.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(str);
     d = hasTimezone ? new Date(str) : new Date(str + 'Z');
   }
@@ -299,65 +305,35 @@ const BarrowsTracker = () => {
       }
     });
 
-    // Group drops by date (local timezone).
-    // Also track the highest full-run kill count seen per date — each drop records
-    // the current killCount at the time it was logged, so the max KC for a date is
-    // the KC reached by the end of that day's session.
+    // Group drops by date (local timezone)
     const dropsByDate = {};
     dropsWithDryStreak.forEach(drop => {
       if (!drop.timestamp) return;
       const date = localDateKey(drop.timestamp);
       if (!dropsByDate[date]) {
-        dropsByDate[date] = { drops: [], uniques: 0, maxKC: null };
+        dropsByDate[date] = { drops: [], uniques: 0 };
       }
       dropsByDate[date].drops.push(drop);
       if (drop.isFirstDrop) {
         dropsByDate[date].uniques++;
       }
-      if (drop.killCount != null) {
-        dropsByDate[date].maxKC = dropsByDate[date].maxKC == null
-          ? drop.killCount
-          : Math.max(dropsByDate[date].maxKC, drop.killCount);
-      }
     });
 
     // Show dates where at least 1 run happened OR at least 1 drop occurred.
     // Including drop dates ensures days with activity don't disappear when
-    // run_history entries are missing (e.g. addRun failed, or runs were added
-    // via Set Run Count which doesn't write to run_history).
+    // run_history entries are missing. Filter out any invalid keys (e.g. "NaN-NaN-NaN")
+    // that could arise if a timestamp fails to parse despite the normalisation above.
     const allDates = new Set([...Object.keys(runsByDate), ...Object.keys(dropsByDate)]);
-    const sortedDates = Array.from(allDates).sort();
+    const sortedDates = Array.from(allDates)
+      .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+      .sort();
 
-    // kcCeiling tracks the highest full-run KC we've confirmed so far (chronologically).
-    // For dates that have drop data but no run_history rows, we estimate full runs
-    // as (this date's max drop KC) − kcCeiling. This works because every drop stores
-    // the current full-run kill count at the moment it was recorded.
     let cumulativeRuns = 0;
-    let kcCeiling = 0;
-
     const summaries = sortedDates.map(date => {
-      const dayDrops = dropsByDate[date] || { drops: [], uniques: 0, maxKC: null };
-      const hasRunHistory = !!runsByDate[date];
+      const dayDrops = dropsByDate[date] || { drops: [], uniques: 0 };
       const dayRuns = runsByDate[date] || { full: 0, linza: 0 };
-
-      let fullRuns = dayRuns.full;
-      let linzaRuns = dayRuns.linza;
-      let estimated = false;
-
-      if (!hasRunHistory && dayDrops.maxKC != null && dayDrops.maxKC > kcCeiling) {
-        // No run_history for this date — derive full run count from the KC delta
-        // recorded in the drop history.
-        fullRuns = dayDrops.maxKC - kcCeiling;
-        estimated = true;
-      }
-
-      // Advance kcCeiling: prefer the actual max drop KC for this date when available
-      // (most accurate), otherwise approximate by adding the run_history full-run count.
-      if (dayDrops.maxKC != null) {
-        kcCeiling = Math.max(kcCeiling, dayDrops.maxKC);
-      } else if (hasRunHistory) {
-        kcCeiling += fullRuns;
-      }
+      const fullRuns = dayRuns.full;
+      const linzaRuns = dayRuns.linza;
 
       const totalRuns = fullRuns + linzaRuns;
       const startingRun = totalRuns > 0 ? cumulativeRuns + 1 : null;
@@ -370,7 +346,6 @@ const BarrowsTracker = () => {
         linzaRuns: linzaRuns > 0 ? linzaRuns : null,
         uniques: dayDrops.uniques,
         startingRun,
-        estimated,
       };
     });
 
@@ -1503,13 +1478,9 @@ const DailySummaryTab = ({ dailySummary, runHistory, onDeleteRun }) => {
                           day: 'numeric'
                         })}
                       </td>
-                      <td className="px-4 py-2 text-center text-stone-400 font-semibold">
-                        {day.startingRun != null ? (day.estimated ? `~${day.startingRun}` : day.startingRun) : '-'}
-                      </td>
+                      <td className="px-4 py-2 text-center text-stone-400 font-semibold">{day.startingRun ?? '-'}</td>
                       <td className="px-4 py-2 text-center text-emerald-400 font-bold">{day.drops}</td>
-                      <td className="px-4 py-2 text-center text-stone-200 font-semibold">
-                        {day.fullRuns != null ? (day.estimated ? `~${day.fullRuns}` : day.fullRuns) : '-'}
-                      </td>
+                      <td className="px-4 py-2 text-center text-stone-200 font-semibold">{day.fullRuns ?? '-'}</td>
                       <td className="px-4 py-2 text-center text-violet-400 font-semibold">{day.linzaRuns ?? '-'}</td>
                       <td className="px-4 py-2 text-center text-yellow-400 font-bold">{day.uniques > 0 ? day.uniques : '-'}</td>
                     </tr>
