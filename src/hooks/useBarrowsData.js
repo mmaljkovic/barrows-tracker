@@ -159,10 +159,10 @@ export const useBarrowsData = () => {
           try {
             const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp, false, newKC);
             // Update with real ID from server
-            setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, killCount: savedRun.kill_count } : r));
+            setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, isLinza: false, killCount: savedRun.kill_count } : r));
           } catch (runErr) {
-            console.warn('Could not save run to database:', runErr.message);
-            // Run history table might not exist, continue with local tracking
+            console.error('Could not save run to database:', runErr.message);
+            setError('Run saved locally but failed to persist to database: ' + runErr.message);
           }
         } catch (err) {
           console.error('Error updating KC:', err);
@@ -198,7 +198,8 @@ export const useBarrowsData = () => {
             const savedRun = await barrowsApi.addRun(user.id, trackerId, timestamp, true, newKC);
             setRunHistory(prev => prev.map(r => r.id === newRun.id ? { id: savedRun.id, timestamp: savedRun.timestamp, isLinza: true, killCount: savedRun.kill_count } : r));
           } catch (runErr) {
-            console.warn('Could not save Linza run to database:', runErr.message);
+            console.error('Could not save Linza run to database:', runErr.message);
+            setError('Run saved locally but failed to persist to database: ' + runErr.message);
           }
         } catch (err) {
           console.error('Error updating Linza KC:', err);

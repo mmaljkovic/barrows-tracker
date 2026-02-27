@@ -313,13 +313,17 @@ const BarrowsTracker = () => {
       }
     });
 
-    // Only show dates where at least 1 run happened (sourced purely from run_history)
-    const sortedDates = Object.keys(runsByDate).sort();
+    // Show dates where at least 1 run happened OR at least 1 drop occurred.
+    // Including drop dates ensures days with activity don't disappear when
+    // run_history entries are missing (e.g. addRun failed, or runs were added
+    // via Set Run Count which doesn't write to run_history).
+    const allDates = new Set([...Object.keys(runsByDate), ...Object.keys(dropsByDate)]);
+    const sortedDates = Array.from(allDates).sort();
 
     let cumulativeRuns = 0;
     const summaries = sortedDates.map(date => {
       const dayDrops = dropsByDate[date] || { drops: [], uniques: 0 };
-      const dayRuns = runsByDate[date];
+      const dayRuns = runsByDate[date] || { full: 0, linza: 0 };
       const fullRuns = dayRuns.full;
       const linzaRuns = dayRuns.linza;
 
