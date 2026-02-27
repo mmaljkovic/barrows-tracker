@@ -27,16 +27,27 @@ export const barrowsApi = {
       finalTracker = newTracker;
     }
 
-    // Get drop history
-    const { data: history, error: historyError } = await supabase
-      .from('drop_history')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true });
+    // Get drop history — paginated to bypass PostgREST's default 1000-row limit
+    const PAGE_SIZE = 1000;
+    let allDrops = [];
+    let from = 0;
+    while (true) {
+      const { data: page, error: historyError } = await supabase
+        .from('drop_history')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
 
-    if (historyError) throw historyError;
+      if (historyError) throw historyError;
+      if (!page || page.length === 0) break;
 
-    return { tracker: finalTracker, history: history || [] };
+      allDrops = allDrops.concat(page);
+      if (page.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    return { tracker: finalTracker, history: allDrops };
   },
 
   // Update kill count (regular and/or Linza)
@@ -157,16 +168,29 @@ export const barrowsApi = {
     return data;
   },
 
-  // Get run history for user
+  // Get run history for user — paginated to bypass PostgREST's default 1000-row limit
   async getRunHistory(userId) {
-    const { data, error } = await supabase
-      .from('run_history')
-      .select('*')
-      .eq('user_id', userId)
-      .order('timestamp', { ascending: true });
+    const PAGE_SIZE = 1000;
+    let allRuns = [];
+    let from = 0;
 
-    if (error) throw error;
-    return data || [];
+    while (true) {
+      const { data, error } = await supabase
+        .from('run_history')
+        .select('*')
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      allRuns = allRuns.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    return allRuns;
   },
 
   // Add a single run
