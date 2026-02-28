@@ -273,12 +273,25 @@ const BarrowsTracker = () => {
     // Combine: known drops first (sorted), then unknown
     const combinedDrops = [...knownWithDryStreak, ...unknownWithDryStreak];
 
-    // Mark first occurrence of each item as unique
+    // Build overall run number lookup from run history (sorted chronologically)
+    const sortedRuns = [...runHistory]
+      .filter(r => r.timestamp && r.killCount != null)
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const overallRunMap = new Map();
+    sortedRuns.forEach((run, idx) => {
+      const key = `${run.isLinza ? 'L' : 'F'}-${run.killCount}`;
+      if (!overallRunMap.has(key)) overallRunMap.set(key, idx + 1);
+    });
+
+    // Mark first occurrence of each item as unique, and attach overall run number
     const seenItems = new Set();
     const dropsWithDryStreak = combinedDrops.map(drop => {
       const isFirstDrop = !seenItems.has(drop.item);
       seenItems.add(drop.item);
-      return { ...drop, isFirstDrop };
+      const overallKC = drop.killCount != null
+        ? (overallRunMap.get(`${drop.isLinza ? 'L' : 'F'}-${drop.killCount}`) ?? null)
+        : null;
+      return { ...drop, isFirstDrop, overallKC };
     });
 
     // Calculate current dry streak (runs since last known drop)
@@ -1361,7 +1374,7 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
                       onClick={() => startEdit(drop.id, 'kc', drop.killCount != null ? drop.killCount.toString() : '')}
                       title="Click to edit"
                     >
-                      {drop.killCount ?? '-'}
+                      {drop.overallKC ?? drop.killCount ?? '-'}
                     </span>
                   )}
                 </td>
