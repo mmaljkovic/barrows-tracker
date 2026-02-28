@@ -273,14 +273,30 @@ const BarrowsTracker = () => {
     // Combine: known drops first (sorted), then unknown
     const combinedDrops = [...knownWithDryStreak, ...unknownWithDryStreak];
 
-    // Build overall run number lookup from run history (sorted chronologically)
+    // Build overall run number lookup using backward-counting from current totals.
+    // runHistory may be incomplete (old runs before tracking started are missing),
+    // so we can't use position in runHistory directly. Instead, for each tracked run,
+    // we count how many runs of each type occurred AFTER it, then subtract from the
+    // current totals (killCount / linzaKillCount) to get the counts at that moment.
     const sortedRuns = [...runHistory]
       .filter(r => r.timestamp && r.killCount != null)
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const n = sortedRuns.length;
+    // Precompute suffix counts: fullAfter[i] / linzaAfter[i] = # of each type at indices > i
+    const fullAfter = new Array(n).fill(0);
+    const linzaAfter = new Array(n).fill(0);
+    for (let i = n - 2; i >= 0; i--) {
+      fullAfter[i] = fullAfter[i + 1] + (sortedRuns[i + 1].isLinza ? 0 : 1);
+      linzaAfter[i] = linzaAfter[i + 1] + (sortedRuns[i + 1].isLinza ? 1 : 0);
+    }
     const overallRunMap = new Map();
     sortedRuns.forEach((run, idx) => {
       const key = `${run.isLinza ? 'L' : 'F'}-${run.killCount}`;
-      if (!overallRunMap.has(key)) overallRunMap.set(key, idx + 1);
+      if (!overallRunMap.has(key)) {
+        const fullKCAtRun = killCount - fullAfter[idx];
+        const linzaKCAtRun = linzaKillCount - linzaAfter[idx];
+        overallRunMap.set(key, fullKCAtRun + linzaKCAtRun);
+      }
     });
 
     // Mark first occurrence of each item as unique, and attach overall run number
