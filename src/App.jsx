@@ -2214,11 +2214,11 @@ const ExportModal = ({ dropHistory, onClose }) => {
       return a.killCount - b.killCount;
     });
     const rows = [
-      ['Kill Count', 'Item', 'Date', 'Drop ID'],
+      ['Kill Count', 'Item', 'Timestamp', 'Drop ID'],
       ...sorted.map(drop => [
         drop.killCount != null ? String(drop.killCount) : '',
         drop.item,
-        drop.timestamp ? drop.timestamp.split('T')[0] : '',
+        drop.timestamp ?? '',
         String(drop.id),
       ]),
     ];
