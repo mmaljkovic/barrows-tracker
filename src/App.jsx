@@ -2214,13 +2214,21 @@ const ExportModal = ({ dropHistory, onClose }) => {
       return a.killCount - b.killCount;
     });
     const rows = [
-      ['Kill Count', 'Item', 'Timestamp', 'Drop ID'],
-      ...sorted.map(drop => [
-        drop.killCount != null ? String(drop.killCount) : '',
-        drop.item,
-        drop.timestamp ?? '',
-        String(drop.id),
-      ]),
+      ['Kill Count', 'Item', 'Date', 'Time', 'Drop ID'],
+      ...sorted.map(drop => {
+        const d = drop.timestamp ? new Date(drop.timestamp) : null;
+        const date = d ? localDateKey(d) : '';
+        const time = d
+          ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
+          : '';
+        return [
+          drop.killCount != null ? String(drop.killCount) : '',
+          drop.item,
+          date,
+          time,
+          String(drop.id),
+        ];
+      }),
     ];
     const csv = rows.map(row => row.join(',')).join('\n');
     const today = localDateKey(new Date());
