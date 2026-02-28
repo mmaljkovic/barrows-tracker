@@ -135,6 +135,7 @@ const BarrowsTracker = () => {
   const [showAddDrop, setShowAddDrop] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showRunExport, setShowRunExport] = useState(false);
   const [kcInput, setKcInput] = useState('');
   const [bulkRunCount, setBulkRunCount] = useState('');
   const [bulkRunDate, setBulkRunDate] = useState('');
@@ -693,6 +694,9 @@ const BarrowsTracker = () => {
                       <button onClick={() => setShowExport(true)} className="bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
                         <Download className="w-4 h-4" /> Export
                       </button>
+                      <button onClick={() => setShowRunExport(true)} className="bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-40">
+                        <Download className="w-4 h-4" /> Export Runs
+                      </button>
                       <button onClick={() => setShowSetup(true)} className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-4 py-2 rounded border-2 border-stone-950 shadow-lg font-semibold flex items-center justify-center gap-2 min-w-32">
                         <Settings className="w-4 h-4" /> Setup
                       </button>
@@ -774,6 +778,13 @@ const BarrowsTracker = () => {
         <ExportModal
           dropHistory={dropHistory}
           onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {showRunExport && (
+        <RunExportModal
+          runHistory={runHistory}
+          onClose={() => setShowRunExport(false)}
         />
       )}
 
@@ -2071,6 +2082,85 @@ const ImportModal = ({ onMerge, onReplace, onClose }) => {
   );
 };
 
+const RunExportModal = ({ runHistory, onClose }) => {
+  const sorted = [...runHistory].sort((a, b) => {
+    if (!a.timestamp && !b.timestamp) return 0;
+    if (!a.timestamp) return 1;
+    if (!b.timestamp) return -1;
+    return new Date(a.timestamp) - new Date(b.timestamp);
+  });
+
+  const csvRows = [
+    ['Date', 'Time', 'Type', 'Kill Count', 'Run ID'],
+    ...sorted.map(run => {
+      const d = run.timestamp ? new Date(run.timestamp) : null;
+      const date = d ? localDateKey(d) : '';
+      const time = d
+        ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
+        : '';
+      const type = run.isLinza ? 'Linza' : 'Full';
+      const kc = run.killCount != null ? String(run.killCount) : '';
+      return [date, time, type, kc, String(run.id)];
+    }),
+  ];
+
+  const csvText = csvRows.map(row => row.join(',')).join('\n');
+
+  const handleDownloadCSV = () => {
+    const today = localDateKey(new Date());
+    const blob = new Blob([csvText], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `barrows-runs-${today}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
+      <div className="bg-gradient-to-br from-stone-900 to-stone-950 rounded-lg shadow-2xl p-6 max-w-lg w-full border-4 border-amber-900 rs-border">
+        <h3 className="text-2xl font-bold rs-text-gold mb-4">Export Run History</h3>
+
+        {runHistory.length === 0 ? (
+          <div className="text-stone-300 text-center py-8 font-semibold">
+            No run history to export.
+          </div>
+        ) : (
+          <>
+            <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 text-center border-2 border-amber-900 shadow-inner mb-4">
+              <div className="text-stone-200 text-sm font-semibold">Total Runs</div>
+              <div className="text-xl font-bold rs-text-gold">{runHistory.length}</div>
+            </div>
+
+            <p className="text-stone-400 text-sm mb-4">
+              Exports all runs as a CSV file with columns: Date, Time, Type (Full/Linza), Kill Count, and Run ID.
+              Opens in Excel, Google Sheets, or any spreadsheet app.
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleDownloadCSV}
+                className="flex-1 bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" /> Download CSV
+              </button>
+              <button
+                onClick={onClose}
+                className="bg-gradient-to-b from-stone-600 to-stone-800 hover:from-stone-500 hover:to-stone-700 text-white px-4 py-2 rounded border-2 border-stone-950 shadow-lg font-bold"
+              >
+                Close
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ExportModal = ({ dropHistory, onClose }) => {
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -2110,6 +2200,35 @@ const ExportModal = ({ dropHistory, onClose }) => {
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadCSV = () => {
+    const sorted = dropHistory.slice().sort((a, b) => {
+      if (a.killCount == null && b.killCount == null) return 0;
+      if (a.killCount == null) return 1;
+      if (b.killCount == null) return -1;
+      return a.killCount - b.killCount;
+    });
+    const rows = [
+      ['Kill Count', 'Item', 'Date', 'Drop ID'],
+      ...sorted.map(drop => [
+        drop.killCount != null ? String(drop.killCount) : '',
+        drop.item,
+        drop.timestamp ? drop.timestamp.split('T')[0] : '',
+        String(drop.id),
+      ]),
+    ];
+    const csv = rows.map(row => row.join(',')).join('\n');
+    const today = localDateKey(new Date());
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `barrows-drops-${today}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -2165,7 +2284,13 @@ const ExportModal = ({ dropHistory, onClose }) => {
                 onClick={handleDownload}
                 className="flex-1 bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold flex items-center justify-center gap-2"
               >
-                <Download className="w-4 h-4" /> Download File
+                <Download className="w-4 h-4" /> Download .txt
+              </button>
+              <button
+                onClick={handleDownloadCSV}
+                className="flex-1 bg-gradient-to-b from-amber-800 to-amber-950 hover:from-amber-700 hover:to-amber-900 text-white px-4 py-2 rounded border-2 border-amber-950 shadow-lg font-bold flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" /> Download CSV
               </button>
               <button
                 onClick={onClose}
