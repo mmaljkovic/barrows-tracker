@@ -312,13 +312,25 @@ const BarrowsTracker = () => {
     // Combine: known drops first (sorted), then unknown
     const combinedDrops = [...knownWithDryStreak, ...unknownWithDryStreak];
 
-    // Mark first occurrence of each item as unique
-    const seenItems = new Set();
-    const dropsWithDryStreak = combinedDrops.map(drop => {
-      const isFirstDrop = !seenItems.has(drop.item);
-      seenItems.add(drop.item);
-      return { ...drop, isFirstDrop };
+    // Mark first occurrence of each item as unique, determined by earliest timestamp.
+    // Falls back to run order for items with no timestamp at all.
+    const firstDropByItem = new Map();
+    combinedDrops.forEach(drop => {
+      if (!drop.timestamp) return;
+      const existing = firstDropByItem.get(drop.item);
+      if (!existing || parseTimestamp(drop.timestamp) < parseTimestamp(existing.timestamp)) {
+        firstDropByItem.set(drop.item, drop);
+      }
     });
+    // Fallback: for items with no timestamped drop, use first by run order
+    combinedDrops.forEach(drop => {
+      if (!firstDropByItem.has(drop.item)) firstDropByItem.set(drop.item, drop);
+    });
+    const firstDropIds = new Set([...firstDropByItem.values()].map(d => d.id));
+    const dropsWithDryStreak = combinedDrops.map(drop => ({
+      ...drop,
+      isFirstDrop: firstDropIds.has(drop.id),
+    }));
 
     // Calculate current dry streak across all runs (full + linza)
     const lastKnownDrop = sortedKnown.length > 0 ? sortedKnown[sortedKnown.length - 1] : null;
