@@ -255,25 +255,6 @@ const BarrowsTracker = () => {
     const knownKCDrops = dropHistory.filter(d => d.killCount != null);
     const unknownKCDrops = dropHistory.filter(d => d.killCount == null);
 
-    // Sort known KC drops and calculate dry streaks
-    const sortedKnown = [...knownKCDrops].sort((a, b) => a.killCount - b.killCount);
-
-    let lastKC = 0;
-    const knownWithDryStreak = sortedKnown.map(drop => {
-      const dryStreak = drop.killCount - lastKC;
-      lastKC = drop.killCount;
-      return { ...drop, dryStreak };
-    });
-
-    // Unknown KC drops have null dry streak
-    const unknownWithDryStreak = unknownKCDrops.map(drop => ({
-      ...drop,
-      dryStreak: null
-    }));
-
-    // Combine: known drops first (sorted), then unknown
-    const combinedDrops = [...knownWithDryStreak, ...unknownWithDryStreak];
-
     // Build overall run number lookup using backward-counting from current totals.
     // runHistory may be incomplete (old runs before tracking started are missing),
     // so we can't use position in runHistory directly. Instead, for each tracked run,
@@ -300,21 +281,49 @@ const BarrowsTracker = () => {
       }
     });
 
-    // Mark first occurrence of each item as unique, and attach overall run number
+    // Enrich known drops with overallKC, then sort by overall run order.
+    // Falls back to type-specific killCount for drops without run history.
+    const knownWithOverallKC = knownKCDrops.map(drop => ({
+      ...drop,
+      overallKC: overallRunMap.get(`${drop.isLinza ? 'L' : 'F'}-${drop.killCount}`) ?? null,
+    }));
+    const sortedKnown = [...knownWithOverallKC].sort((a, b) => {
+      const aKC = a.overallKC ?? a.killCount;
+      const bKC = b.overallKC ?? b.killCount;
+      return aKC - bKC;
+    });
+
+    // Calculate per-drop dry streaks using overall run numbers
+    let lastOverallKC = 0;
+    const knownWithDryStreak = sortedKnown.map(drop => {
+      const effectiveKC = drop.overallKC ?? drop.killCount;
+      const dryStreak = effectiveKC - lastOverallKC;
+      lastOverallKC = effectiveKC;
+      return { ...drop, dryStreak };
+    });
+
+    // Unknown KC drops have null dry streak
+    const unknownWithDryStreak = unknownKCDrops.map(drop => ({
+      ...drop,
+      dryStreak: null,
+      overallKC: null,
+    }));
+
+    // Combine: known drops first (sorted), then unknown
+    const combinedDrops = [...knownWithDryStreak, ...unknownWithDryStreak];
+
+    // Mark first occurrence of each item as unique
     const seenItems = new Set();
     const dropsWithDryStreak = combinedDrops.map(drop => {
       const isFirstDrop = !seenItems.has(drop.item);
       seenItems.add(drop.item);
-      const overallKC = drop.killCount != null
-        ? (overallRunMap.get(`${drop.isLinza ? 'L' : 'F'}-${drop.killCount}`) ?? null)
-        : null;
-      return { ...drop, isFirstDrop, overallKC };
+      return { ...drop, isFirstDrop };
     });
 
-    // Calculate current dry streak (runs since last known drop)
+    // Calculate current dry streak across all runs (full + linza)
     const lastKnownDrop = sortedKnown.length > 0 ? sortedKnown[sortedKnown.length - 1] : null;
-    const lastKnownDropKC = lastKnownDrop ? lastKnownDrop.killCount : 0;
-    const currentDryStreak = killCount - lastKnownDropKC;
+    const lastKnownDropOverallKC = lastKnownDrop ? (lastKnownDrop.overallKC ?? lastKnownDrop.killCount) : 0;
+    const currentDryStreak = (killCount + linzaKillCount) - lastKnownDropOverallKC;
 
     return { uniquesObtained, totalDrops, dropsWithDryStreak, currentDryStreak, lastKnownDrop };
   };
@@ -614,7 +623,7 @@ const BarrowsTracker = () => {
               {stats.lastKnownDrop && (
                 <div className="mt-1.5">
                   <div className="text-stone-300 text-xs font-semibold truncate">{stats.lastKnownDrop.item}</div>
-                  <div className="text-stone-400 text-xs">Run #{stats.lastKnownDrop.killCount}</div>
+                  <div className="text-stone-400 text-xs">Run #{stats.lastKnownDrop.overallKC ?? stats.lastKnownDrop.killCount}</div>
                 </div>
               )}
             </div>
