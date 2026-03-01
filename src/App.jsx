@@ -1174,9 +1174,9 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
             ? aVal.localeCompare(bVal)
             : bVal.localeCompare(aVal);
         case 'killCount':
-          // Null values sort to the end
-          aVal = a.killCount ?? Infinity;
-          bVal = b.killCount ?? Infinity;
+          // Use overallKC when available so linza and full runs sort together
+          aVal = a.overallKC ?? a.killCount ?? Infinity;
+          bVal = b.overallKC ?? b.killCount ?? Infinity;
           break;
         case 'dryStreak':
           // Null values sort to the end
