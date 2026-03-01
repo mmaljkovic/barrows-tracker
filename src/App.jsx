@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, Trash2, Settings, Award, ArrowLeft, Download, Upload, LogIn, X, BookOpen, ScrollText, CalendarDays, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown } from 'lucide-react';
+import { Plus, Trash2, Settings, Award, ArrowLeft, Download, Upload, LogIn, X, BookOpen, ScrollText, CalendarDays, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Lock, LockOpen } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { useBarrowsData } from './hooks/useBarrowsData';
 import AuthModal from './components/Auth/AuthModal';
@@ -138,6 +138,8 @@ const BarrowsTracker = () => {
   const [kcInput, setKcInput] = useState('');
   const [bulkRunCount, setBulkRunCount] = useState('');
   const [bulkRunDate, setBulkRunDate] = useState('');
+  const [fullRunLocked, setFullRunLocked] = useState(false);
+  const [linzaRunLocked, setLinzaRunLocked] = useState(false);
 
   // Toast system
   const [toasts, setToasts] = useState([]);
@@ -565,24 +567,44 @@ const BarrowsTracker = () => {
                 </div>
               )}
               <div className="flex gap-1.5 mt-2">
-                <button
-                  onClick={() => { incrementKC(); addToast(`Run ${killCount + 1} added`, { undoAction: { type: 'run', isLinza: false } }); }}
-                  className="flex-1 flex items-center justify-between px-2 py-1.5 rounded bg-stone-800/80 hover:bg-stone-700/80 border border-stone-700 transition-colors group"
-                  title="Add full run"
-                >
-                  <span className="text-stone-300 text-xs font-semibold">Full</span>
-                  <span className="text-sm font-bold text-stone-100">{killCount}</span>
-                  <span className="w-4 h-4 rounded bg-stone-600 group-hover:bg-stone-500 flex items-center justify-center text-white text-[10px] font-bold transition-colors shrink-0">+</span>
-                </button>
-                <button
-                  onClick={() => { incrementLinzaKC(); addToast(`Linza run ${linzaKillCount + 1} added`, { undoAction: { type: 'run', isLinza: true } }); }}
-                  className="flex-1 flex items-center justify-between px-2 py-1.5 rounded bg-violet-950/50 hover:bg-violet-900/50 border border-violet-900/50 transition-colors group"
-                  title="Add Linza run"
-                >
-                  <span className="text-violet-300 text-xs font-semibold">Linza</span>
-                  <span className="text-sm font-bold text-violet-200">{linzaKillCount}</span>
-                  <span className="w-4 h-4 rounded bg-violet-800 group-hover:bg-violet-700 flex items-center justify-center text-white text-[10px] font-bold transition-colors shrink-0">+</span>
-                </button>
+                <div className="flex-1 flex items-center gap-1">
+                  <button
+                    onClick={() => { if (!fullRunLocked) { incrementKC(); addToast(`Run ${killCount + 1} added`, { undoAction: { type: 'run', isLinza: false } }); } }}
+                    disabled={fullRunLocked}
+                    className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded border transition-colors group ${fullRunLocked ? 'bg-stone-900/60 border-stone-800 opacity-50 cursor-not-allowed' : 'bg-stone-800/80 hover:bg-stone-700/80 border-stone-700'}`}
+                    title={fullRunLocked ? 'Full runs locked' : 'Add full run'}
+                  >
+                    <span className="text-stone-300 text-xs font-semibold">Full</span>
+                    <span className="text-sm font-bold text-stone-100">{killCount}</span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center text-white text-[10px] font-bold transition-colors shrink-0 ${fullRunLocked ? 'bg-stone-700' : 'bg-stone-600 group-hover:bg-stone-500'}`}>+</span>
+                  </button>
+                  <button
+                    onClick={() => setFullRunLocked(l => !l)}
+                    className={`p-1 rounded border transition-colors ${fullRunLocked ? 'bg-red-950/60 border-red-900/60 text-red-400 hover:bg-red-900/60' : 'bg-stone-800/60 border-stone-700 text-stone-500 hover:text-stone-300 hover:bg-stone-700/60'}`}
+                    title={fullRunLocked ? 'Unlock full runs' : 'Lock full runs'}
+                  >
+                    {fullRunLocked ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />}
+                  </button>
+                </div>
+                <div className="flex-1 flex items-center gap-1">
+                  <button
+                    onClick={() => { if (!linzaRunLocked) { incrementLinzaKC(); addToast(`Linza run ${linzaKillCount + 1} added`, { undoAction: { type: 'run', isLinza: true } }); } }}
+                    disabled={linzaRunLocked}
+                    className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded border transition-colors group ${linzaRunLocked ? 'bg-stone-900/60 border-stone-800 opacity-50 cursor-not-allowed' : 'bg-violet-950/50 hover:bg-violet-900/50 border-violet-900/50'}`}
+                    title={linzaRunLocked ? 'Linza runs locked' : 'Add Linza run'}
+                  >
+                    <span className="text-violet-300 text-xs font-semibold">Linza</span>
+                    <span className="text-sm font-bold text-violet-200">{linzaKillCount}</span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center text-white text-[10px] font-bold transition-colors shrink-0 ${linzaRunLocked ? 'bg-violet-900/50' : 'bg-violet-800 group-hover:bg-violet-700'}`}>+</span>
+                  </button>
+                  <button
+                    onClick={() => setLinzaRunLocked(l => !l)}
+                    className={`p-1 rounded border transition-colors ${linzaRunLocked ? 'bg-red-950/60 border-red-900/60 text-red-400 hover:bg-red-900/60' : 'bg-stone-800/60 border-stone-700 text-stone-500 hover:text-stone-300 hover:bg-stone-700/60'}`}
+                    title={linzaRunLocked ? 'Unlock Linza runs' : 'Lock Linza runs'}
+                  >
+                    {linzaRunLocked ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />}
+                  </button>
+                </div>
               </div>
             </div>
             {/* Dry Streak */}
