@@ -74,17 +74,16 @@ const BARROWS_DATA = {
 // and minutes), e.g. "2026-02-22 01:30:00+00". The regex below normalises these to
 // "+00:00" so JS Date can parse them correctly — without this, the offset is undetected,
 // "Z" gets appended producing an invalid string, and getFullYear() returns NaN.
+const parseTimestamp = (ts) => {
+  if (ts instanceof Date) return ts;
+  let str = String(ts).replace(' ', 'T');
+  str = str.replace(/([+-]\d{2})$/, '$1:00');
+  const hasTimezone = str.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(str);
+  return hasTimezone ? new Date(str) : new Date(str + 'Z');
+};
+
 const localDateKey = (ts) => {
-  let d;
-  if (ts instanceof Date) {
-    d = ts;
-  } else {
-    // Normalise PostgreSQL space separator and short timezone offsets (+HH → +HH:00)
-    let str = String(ts).replace(' ', 'T');
-    str = str.replace(/([+-]\d{2})$/, '$1:00');
-    const hasTimezone = str.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(str);
-    d = hasTimezone ? new Date(str) : new Date(str + 'Z');
-  }
+  const d = parseTimestamp(ts);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -517,6 +516,13 @@ const BarrowsTracker = () => {
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
+  const mostRecentRunTime = runHistory.length > 0
+    ? runHistory.reduce((latest, run) => {
+        const d = parseTimestamp(run.timestamp);
+        return !latest || d > latest ? d : latest;
+      }, null)
+    : null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-950 via-stone-900 to-neutral-950 p-4">
       <div className="max-w-7xl mx-auto">
@@ -551,6 +557,13 @@ const BarrowsTracker = () => {
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 border-2 border-amber-900 shadow-inner">
               <div className="text-stone-200 text-sm font-semibold text-center">Runs</div>
               <div className="text-2xl font-bold rs-text-gold text-center">{killCount + linzaKillCount}</div>
+              {mostRecentRunTime && (
+                <div className="text-stone-400 text-xs text-center mt-0.5">
+                  <span className="text-stone-500">last run: </span>
+                  {mostRecentRunTime.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{', '}
+                  {mostRecentRunTime.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                </div>
+              )}
               <div className="flex gap-1.5 mt-2">
                 <button
                   onClick={() => { incrementKC(); addToast(`Run ${killCount + 1} added`, { undoAction: { type: 'run', isLinza: false } }); }}
