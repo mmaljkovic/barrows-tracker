@@ -578,7 +578,7 @@ const BarrowsTracker = () => {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
             {/* Runs card with inline + buttons */}
             <div className="bg-gradient-to-br from-amber-950 to-stone-900 rounded p-3 border-2 border-amber-900 shadow-inner">
-              <div className="text-stone-200 text-sm font-semibold text-center">Runs</div>
+              <div className="text-stone-200 text-sm font-semibold text-center">Chests</div>
               <div className="text-2xl font-bold rs-text-gold text-center">{killCount + linzaKillCount}</div>
               {mostRecentRunTime && (
                 <div className="text-stone-400 text-xs text-center mt-0.5">
