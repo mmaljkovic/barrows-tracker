@@ -65,6 +65,13 @@ const BARROWS_DATA = {
   ]
 };
 
+// Flat lookup: item name → brother name
+const ITEM_BROTHER_MAP = Object.fromEntries(
+  Object.entries(BARROWS_DATA).flatMap(([brother, items]) =>
+    items.map(item => [item.name, brother])
+  )
+);
+
 // Converts a timestamp string to a local YYYY-MM-DD date key.
 // Uses local date components instead of toLocaleDateString('en-CA') to
 // guarantee YYYY-MM-DD format regardless of browser locale settings.
@@ -1149,6 +1156,7 @@ const CollectionTab = ({ drops, onQuickAdd, onQuickRemove, getBrotherCompletion,
 };
 
 const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, setHideCorruptionSigil, hideUnknownRuns, setHideUnknownRuns, showOnlyUniques, setShowOnlyUniques }) => {
+  const [filterBrother, setFilterBrother] = useState(null);
   const [editingCell, setEditingCell] = useState(null); // { dropId, field: 'kc' | 'date' }
   const [editValue, setEditValue] = useState('');
   const [sortConfig, setSortConfig] = useState(() => {
@@ -1275,6 +1283,9 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
   if (showOnlyUniques) {
     filteredData = filteredData.filter(drop => drop.isFirstDrop);
   }
+  if (filterBrother) {
+    filteredData = filteredData.filter(drop => ITEM_BROTHER_MAP[drop.item] === filterBrother);
+  }
 
   const startEdit = (dropId, field, value) => {
     setEditingCell({ dropId, field });
@@ -1330,6 +1341,23 @@ const StatisticsTab = ({ stats, updateDrop, removeDrop, hideCorruptionSigil, set
             />
             Hide Corruption Sigil
           </label>
+          <div className="w-px h-4 bg-stone-600 hidden sm:block" />
+          <div className="flex flex-wrap gap-1 items-center">
+            <span className="text-stone-400 text-xs font-semibold mr-0.5">Brother:</span>
+            {[null, ...Object.keys(BARROWS_DATA)].map(brother => (
+              <button
+                key={brother ?? 'all'}
+                onClick={() => setFilterBrother(brother)}
+                className={`px-2 py-0.5 rounded text-xs font-semibold transition-colors ${
+                  filterBrother === brother
+                    ? 'bg-amber-700 text-white border border-amber-600'
+                    : 'bg-stone-700/60 text-stone-300 border border-stone-600 hover:bg-stone-600/60'
+                }`}
+              >
+                {brother ?? 'All'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
